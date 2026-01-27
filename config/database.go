@@ -35,17 +35,8 @@ func ConnectDatabase() {
 	DB = database
 }
 
-	// Kết nối database
-	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
-
-	log.Println("Database connected successfully!")
-	DB = database
-}
-
 // GetDB trả về instance của database
 func GetDB() *gorm.DB {
 	return DB
+}
 }
