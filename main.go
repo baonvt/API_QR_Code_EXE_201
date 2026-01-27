@@ -41,10 +41,6 @@ func main() {
 	// Kết nối database
 	config.ConnectDatabase()
 
-	// Kết nối Redis
-	config.ConnectRedis()
-	defer config.CloseRedis()
-
 	// Chạy migrations
 	if err := config.RunMigrations(); err != nil {
 		log.Fatal("Failed to run migrations:", err)
