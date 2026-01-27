@@ -1,4 +1,7 @@
 {
+    "schemes": [
+        "https"
+    ],
     "swagger": "2.0",
     "info": {
         "description": "API quản lý nhà hàng - Khách order và thanh toán trực tiếp",
@@ -6,7 +9,7 @@
         "contact": {},
         "version": "1.0"
     },
-    "host": "localhost:8080",
+    "host": "apiqrcodeexe201-production.up.railway.app",
     "basePath": "/api/v1",
     "paths": {
         "/admin/packages": {

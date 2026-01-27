@@ -220,7 +220,7 @@ definitions:
       status:
         type: string
     type: object
-host: localhost:8080
+host: apiqrcodeexe201-production.up.railway.app
 info:
   contact: {}
   description: API quản lý nhà hàng - Khách order và thanh toán trực tiếp
@@ -1361,6 +1361,8 @@ paths:
       summary: Upload ảnh từ URL
       tags:
       - Upload
+schemes:
+- https
 securityDefinitions:
   BearerAuth:
     description: 'Nhập token: Bearer {token}'
