@@ -1,0 +1,1370 @@
+basePath: /api/v1
+definitions:
+  handlers.AddOrderItemsInput:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/handlers.OrderItemInput'
+        minItems: 1
+        type: array
+    required:
+    - items
+    type: object
+  handlers.CreateCategoryInput:
+    properties:
+      description:
+        type: string
+      image:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+    required:
+    - name
+    type: object
+  handlers.CreateMenuItemInput:
+    properties:
+      category_id:
+        type: integer
+      description:
+        type: string
+      image:
+        type: string
+      name:
+        type: string
+      options:
+        description: JSON string
+        type: string
+      prep_location:
+        description: kitchen, bar
+        type: string
+      prep_time:
+        type: integer
+      price:
+        type: number
+      sort_order:
+        type: integer
+      tags:
+        description: JSON string
+        type: string
+    required:
+    - category_id
+    - name
+    - price
+    type: object
+  handlers.CreateOrderInput:
+    properties:
+      customer_name:
+        type: string
+      customer_phone:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/handlers.OrderItemInput'
+        minItems: 1
+        type: array
+      notes:
+        type: string
+      payment_method:
+        description: cash, qr, momo, vnpay
+        type: string
+      table_number:
+        type: integer
+    required:
+    - items
+    - payment_method
+    - table_number
+    type: object
+  handlers.CreateTableInput:
+    properties:
+      capacity:
+        type: integer
+      name:
+        type: string
+      table_number:
+        type: integer
+    required:
+    - table_number
+    type: object
+  handlers.LoginInput:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  handlers.OrderItemInput:
+    properties:
+      menu_item_id:
+        type: integer
+      notes:
+        type: string
+      quantity:
+        minimum: 1
+        type: integer
+      selected_options:
+        description: JSON string
+        type: string
+    required:
+    - menu_item_id
+    - quantity
+    type: object
+  handlers.PayOrderInput:
+    properties:
+      payment_method:
+        type: string
+    required:
+    - payment_method
+    type: object
+  handlers.RegisterInput:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      package_id:
+        type: integer
+      password:
+        minLength: 6
+        type: string
+      phone:
+        type: string
+      restaurant_name:
+        type: string
+    required:
+    - email
+    - name
+    - package_id
+    - password
+    - restaurant_name
+    type: object
+  handlers.UpdateCategoryInput:
+    properties:
+      description:
+        type: string
+      image:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: string
+    type: object
+  handlers.UpdateMenuItemInput:
+    properties:
+      category_id:
+        type: integer
+      description:
+        type: string
+      image:
+        type: string
+      name:
+        type: string
+      options:
+        type: string
+      prep_location:
+        type: string
+      prep_time:
+        type: integer
+      price:
+        type: number
+      sort_order:
+        type: integer
+      status:
+        type: string
+      tags:
+        type: string
+    type: object
+  handlers.UpdateOrderStatusInput:
+    properties:
+      note:
+        type: string
+      status:
+        type: string
+    required:
+    - status
+    type: object
+  handlers.UpdateRestaurantInput:
+    properties:
+      address:
+        type: string
+      description:
+        type: string
+      email:
+        type: string
+      is_open:
+        type: boolean
+      logo:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      service_charge:
+        type: number
+      tax_rate:
+        type: number
+    type: object
+  handlers.UpdateTableInput:
+    properties:
+      capacity:
+        type: integer
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API quản lý nhà hàng - Khách order và thanh toán trực tiếp
+  title: Restaurant API
+  version: "1.0"
+paths:
+  /admin/packages:
+    post:
+      consumes:
+      - application/json
+      description: Admin tạo gói dịch vụ mới
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Tạo gói dịch vụ
+      tags:
+      - Admin
+  /admin/packages/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Admin cập nhật gói dịch vụ
+      parameters:
+      - description: Package ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật gói dịch vụ
+      tags:
+      - Admin
+  /admin/restaurants:
+    get:
+      consumes:
+      - application/json
+      description: Admin lấy danh sách tất cả nhà hàng
+      parameters:
+      - description: Filter theo status
+        in: query
+        name: status
+        type: string
+      - description: Filter theo package_status
+        in: query
+        name: package_status
+        type: string
+      - description: Tìm kiếm theo tên
+        in: query
+        name: search
+        type: string
+      - default: 1
+        description: Trang
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Số lượng/trang
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy tất cả nhà hàng
+      tags:
+      - Admin
+  /admin/restaurants/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: Admin cập nhật trạng thái nhà hàng (active/suspended/deleted)
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật trạng thái nhà hàng
+      tags:
+      - Admin
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Đăng nhập bằng email và password để lấy JWT token
+      parameters:
+      - description: Thông tin đăng nhập
+        in: body
+        name: login
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Đăng nhập
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Đăng xuất khỏi hệ thống
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Đăng xuất
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Lấy thông tin user đang đăng nhập
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy thông tin user
+      tags:
+      - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Lấy token mới từ token hiện tại
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Làm mới token
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Đăng ký tài khoản và tạo nhà hàng mới
+      parameters:
+      - description: Thông tin đăng ký
+        in: body
+        name: register
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Đăng ký nhà hàng
+      tags:
+      - Auth
+  /categories/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Xóa danh mục (chỉ khi không có món)
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Xóa danh mục
+      tags:
+      - Categories
+    put:
+      consumes:
+      - application/json
+      description: Cập nhật thông tin danh mục
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin cập nhật
+        in: body
+        name: category
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateCategoryInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật danh mục
+      tags:
+      - Categories
+  /categories/{id}/items:
+    get:
+      consumes:
+      - application/json
+      description: Lấy danh sách món ăn trong một danh mục
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: active
+        description: Filter theo status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lấy món theo danh mục
+      tags:
+      - Categories
+  /menu/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Xóa (vô hiệu hóa) món ăn
+      parameters:
+      - description: Menu Item ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Xóa món
+      tags:
+      - Menu
+    put:
+      consumes:
+      - application/json
+      description: Cập nhật thông tin món ăn
+      parameters:
+      - description: Menu Item ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin cập nhật
+        in: body
+        name: menu
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateMenuItemInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật món
+      tags:
+      - Menu
+  /orders/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Lấy thông tin chi tiết của một đơn hàng (Public - cho tracking)
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lấy chi tiết đơn hàng
+      tags:
+      - Orders
+  /orders/{id}/bill:
+    get:
+      consumes:
+      - application/json
+      description: Lấy thông tin để in bill cho đơn hàng
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy thông tin hóa đơn
+      tags:
+      - Orders
+  /orders/{id}/items:
+    post:
+      consumes:
+      - application/json
+      description: Khách thêm món vào đơn hàng đang phục vụ (Public)
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Danh sách món thêm
+        in: body
+        name: items
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddOrderItemsInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Thêm món vào đơn hàng
+      tags:
+      - Orders
+  /orders/{id}/pay:
+    put:
+      consumes:
+      - application/json
+      description: Xác nhận thanh toán cho đơn hàng (dùng khi khách chưa thanh toán
+        trước)
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Phương thức thanh toán
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.PayOrderInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Thanh toán đơn hàng
+      tags:
+      - Orders
+  /orders/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: 'Nhà hàng cập nhật trạng thái: confirmed -> serving -> completed'
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trạng thái mới
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateOrderStatusInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật trạng thái đơn hàng
+      tags:
+      - Orders
+  /packages:
+    get:
+      consumes:
+      - application/json
+      description: Lấy tất cả gói dịch vụ đang active
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lấy danh sách gói dịch vụ
+      tags:
+      - Packages
+  /public/restaurants/{slug}:
+    get:
+      consumes:
+      - application/json
+      description: Lấy thông tin nhà hàng theo slug (cho khách)
+      parameters:
+      - description: Restaurant Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lấy nhà hàng theo slug
+      tags:
+      - Public
+  /public/restaurants/{slug}/menu:
+    get:
+      consumes:
+      - application/json
+      description: Lấy menu đầy đủ của nhà hàng theo slug (cho khách hàng)
+      parameters:
+      - description: Restaurant Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lấy menu theo slug
+      tags:
+      - Public
+  /public/restaurants/{slug}/orders:
+    post:
+      consumes:
+      - application/json
+      description: Khách hàng tạo đơn và thanh toán luôn
+      parameters:
+      - description: Restaurant Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Thông tin đơn hàng
+        in: body
+        name: order
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateOrderInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Tạo đơn hàng mới
+      tags:
+      - Public
+  /restaurants/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Cập nhật thông tin nhà hàng
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin cập nhật
+        in: body
+        name: restaurant
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateRestaurantInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật nhà hàng
+      tags:
+      - Restaurants
+  /restaurants/{id}/categories:
+    get:
+      consumes:
+      - application/json
+      description: Lấy tất cả danh mục của nhà hàng
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: active
+        description: Filter theo status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lấy danh sách danh mục
+      tags:
+      - Categories
+    post:
+      consumes:
+      - application/json
+      description: Tạo danh mục món ăn mới
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin danh mục
+        in: body
+        name: category
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateCategoryInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Tạo danh mục
+      tags:
+      - Categories
+  /restaurants/{id}/menu:
+    get:
+      consumes:
+      - application/json
+      description: Lấy danh sách tất cả món ăn của nhà hàng
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Filter theo danh mục
+        in: query
+        name: category_id
+        type: integer
+      - default: active
+        description: Filter theo status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lấy menu nhà hàng
+      tags:
+      - Menu
+    post:
+      consumes:
+      - application/json
+      description: Tạo một món ăn mới cho nhà hàng
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin món ăn
+        in: body
+        name: menu
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateMenuItemInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Tạo món mới
+      tags:
+      - Menu
+  /restaurants/{id}/orders:
+    get:
+      consumes:
+      - application/json
+      description: Lấy danh sách đơn hàng của nhà hàng với phân trang và filter
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Filter theo status
+        enum:
+        - pending
+        - confirmed
+        - serving
+        - completed
+        - cancelled
+        in: query
+        name: status
+        type: string
+      - description: Filter theo ngày (YYYY-MM-DD)
+        in: query
+        name: date
+        type: string
+      - description: Filter theo bàn
+        in: query
+        name: table_id
+        type: integer
+      - default: 1
+        description: Trang
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Số lượng/trang
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách đơn hàng
+      tags:
+      - Orders
+  /restaurants/{id}/payment-settings:
+    get:
+      consumes:
+      - application/json
+      description: Lấy cài đặt phương thức thanh toán của nhà hàng
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy cài đặt thanh toán
+      tags:
+      - Restaurants
+    put:
+      consumes:
+      - application/json
+      description: Cập nhật cài đặt phương thức thanh toán
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật cài đặt thanh toán
+      tags:
+      - Restaurants
+  /restaurants/{id}/stats/menu:
+    get:
+      consumes:
+      - application/json
+      description: Lấy top món bán chạy và thống kê theo danh mục
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Thống kê món bán chạy
+      tags:
+      - Statistics
+  /restaurants/{id}/stats/overview:
+    get:
+      consumes:
+      - application/json
+      description: Lấy thống kê tổng quan của nhà hàng (hôm nay, tháng này, bàn, đơn
+        hàng)
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Thống kê tổng quan
+      tags:
+      - Statistics
+  /restaurants/{id}/stats/revenue:
+    get:
+      consumes:
+      - application/json
+      description: Lấy thống kê doanh thu theo thời gian
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: day
+        description: Kỳ thống kê
+        enum:
+        - day
+        - week
+        - month
+        in: query
+        name: period
+        type: string
+      - description: Ngày bắt đầu (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: Ngày kết thúc (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Thống kê doanh thu
+      tags:
+      - Statistics
+  /restaurants/{id}/tables:
+    get:
+      consumes:
+      - application/json
+      description: Lấy tất cả bàn của nhà hàng
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Filter theo status
+        enum:
+        - available
+        - occupied
+        - reserved
+        in: query
+        name: status
+        type: string
+      - description: Filter theo is_active
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách bàn
+      tags:
+      - Tables
+    post:
+      consumes:
+      - application/json
+      description: Tạo bàn mới cho nhà hàng
+      parameters:
+      - description: Restaurant ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin bàn
+        in: body
+        name: table
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateTableInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Tạo bàn mới
+      tags:
+      - Tables
+  /restaurants/me:
+    get:
+      consumes:
+      - application/json
+      description: Lấy thông tin nhà hàng của user đang đăng nhập
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy nhà hàng của tôi
+      tags:
+      - Restaurants
+  /tables/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Xóa (vô hiệu hóa) bàn
+      parameters:
+      - description: Table ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Xóa bàn
+      tags:
+      - Tables
+    put:
+      consumes:
+      - application/json
+      description: Cập nhật thông tin bàn
+      parameters:
+      - description: Table ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin cập nhật
+        in: body
+        name: table
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateTableInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cập nhật bàn
+      tags:
+      - Tables
+  /upload/image:
+    delete:
+      consumes:
+      - application/json
+      description: Xóa ảnh từ server bằng đường dẫn
+      parameters:
+      - description: Đường dẫn ảnh
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Xóa ảnh
+      tags:
+      - Upload
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload ảnh vào server (menu, category, restaurant, avatar)
+      parameters:
+      - description: File ảnh (jpg, png, gif, webp)
+        in: formData
+        name: file
+        required: true
+        type: file
+      - default: menu
+        description: Thư mục lưu trữ
+        in: formData
+        name: folder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upload ảnh
+      tags:
+      - Upload
+  /upload/images:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload nhiều ảnh vào server (tối đa 10 ảnh)
+      parameters:
+      - description: Các file ảnh
+        in: formData
+        name: files
+        required: true
+        type: file
+      - default: menu
+        description: Thư mục lưu trữ
+        in: formData
+        name: folder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upload nhiều ảnh
+      tags:
+      - Upload
+  /upload/url:
+    post:
+      consumes:
+      - application/json
+      description: Tính năng này đã bị tắt
+      produces:
+      - application/json
+      responses:
+        "501":
+          description: Not Implemented
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upload ảnh từ URL
+      tags:
+      - Upload
+securityDefinitions:
+  BearerAuth:
+    description: 'Nhập token: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
