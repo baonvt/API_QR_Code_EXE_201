@@ -457,11 +457,13 @@ func LinkSepayAccount(c *gin.Context) {
 	bankName := config.BankCodeToName(input.BankCode)
 
 	updates := map[string]interface{}{
-		"bank_code":      input.BankCode,
-		"bank_name":      bankName,
-		"account_number": input.AccountNumber,
-		"account_name":   input.AccountName,
-		"accept_qr":      true, // Tự động bật thanh toán QR
+		"bank_code":       input.BankCode,
+		"bank_name":       bankName,
+		"account_number":  input.AccountNumber,
+		"account_name":    input.AccountName,
+		"sepay_linked":    true,
+		"sepay_linked_at": now,
+		"accept_qr":       true, // Tự động bật thanh toán QR
 	}
 
 	if err := db.Model(&settings).Updates(updates).Error; err != nil {
@@ -469,54 +471,24 @@ func LinkSepayAccount(c *gin.Context) {
 		return
 	}
 
-	// STEP 1: Gọi SePay API để tạo phiên kết nối
-	sepayService := services.NewSepayService()
-	linkingReq := services.LinkingSessionRequest{
-		BankCode:      input.BankCode,
-		AccountNumber: input.AccountNumber,
-		AccountName:   input.AccountName,
-	}
+	log.Printf("✅ Restaurant %d linked bank account: %s ****%s", restaurantID, bankName, input.AccountNumber[len(input.AccountNumber)-4:])
 
-	linkingResp, err := sepayService.CreateLinkingSession(linkingReq)
-	if err != nil {
-		log.Printf("❌ SePay linking session creation failed: %v", err)
-		utils.ErrorResponse(c, http.StatusBadRequest, "Không thể tạo phiên kết nối SePay: "+err.Error(), "SEPAY_ERROR", "")
-		return
-	}
+	// Tạo QR mẫu cho nhà hàng
+	qr := services.GenerateRestaurantQR(input.BankCode, input.AccountNumber, input.AccountName, 0, "")
 
-	log.Printf("✅ SePay linking session created: session_id=%s", linkingResp.SessionID)
-
-	// STEP 2: Lưu session ID để tracking
-	// Note: Có thể mở rộng PaymentSetting để lưu session_id, expires_at nếu cần
-	// Tạm thời lưu vào cache hoặc session
-
-	// STEP 3: Trả về QR/Link cho nhà hàng
+	// Trả về thông tin đã lưu
 	response := gin.H{
-		"message":      "Phiên kết nối SePay đã tạo, vui lòng quét QR hoặc nhấn link để xác thực",
-		"session_id":   linkingResp.SessionID,
+		"message":      "Liên kết tài khoản ngân hàng thành công",
+		"linked":       true,
+		"linked_at":    now,
 		"bank_code":    input.BankCode,
 		"bank_name":    bankName,
 		"account_no":   maskAccountNumber(input.AccountNumber),
 		"account_name": input.AccountName,
+		"qr_sample":    qr.QRURL,
 	}
 
-	// Thêm QR nếu có
-	if linkingResp.QRCode != "" {
-		response["qr_code"] = linkingResp.QRCode
-	}
-
-	// Thêm link nếu có
-	if linkingResp.LinkURL != "" {
-		response["link_url"] = linkingResp.LinkURL
-	}
-
-	// Thêm thời gian hết hạn
-	if linkingResp.ExpiresIn > 0 {
-		response["expires_in_seconds"] = linkingResp.ExpiresIn
-		response["expires_at"] = now.Add(time.Duration(linkingResp.ExpiresIn) * time.Second)
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, response, "Vui lòng hoàn tất xác thực trên ứng dụng ngân hàng")
+	utils.SuccessResponse(c, http.StatusOK, response, "Đã lưu thông tin tài khoản ngân hàng. Khách hàng có thể thanh toán qua QR.")
 }
 
 // CheckSepayLinkingSession kiểm tra trạng thái phiên kết nối SePay
