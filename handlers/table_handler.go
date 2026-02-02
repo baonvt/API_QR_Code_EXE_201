@@ -343,12 +343,12 @@ func GetTableDetail(c *gin.Context) {
 		var itemsData []gin.H
 		for _, item := range order.OrderItems {
 			itemData := gin.H{
-				"id":         item.ID,
-				"quantity":   item.Quantity,
-				"item_name":  item.ItemName,
-				"item_price": item.ItemPrice,
-				"line_total": item.LineTotal,
-				"notes":      item.Notes,
+				"id":          item.ID,
+				"quantity":    item.Quantity,
+				"item_name":   item.ItemName,
+				"item_price":  item.ItemPrice,
+				"line_total":  item.LineTotal,
+				"notes":       item.Notes,
 				"prep_status": item.PrepStatus,
 			}
 			if item.MenuItem != nil {
