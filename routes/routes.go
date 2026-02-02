@@ -148,6 +148,7 @@ func SetupRoutes(router *gin.Engine) {
 		tables.Use(middleware.AuthMiddleware())
 		tables.Use(middleware.RestaurantOrAdmin())
 		{
+			tables.GET("/:id/detail", handlers.GetTableDetail)
 			tables.PUT("/:id", handlers.UpdateTable)
 			tables.DELETE("/:id", handlers.DeleteTable)
 		}

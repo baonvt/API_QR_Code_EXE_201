@@ -299,3 +299,100 @@ func DeleteTable(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusOK, nil, "Xóa bàn thành công")
 }
+
+// GetTableDetail lấy chi tiết bàn với đơn hàng đang hoạt động
+// @Summary Lấy chi tiết bàn
+// @Description Lấy thông tin bàn kèm đơn hàng đang có và chi tiết từng món
+// @Tags Tables
+// @Accept json
+// @Produce json
+// @Param id path int true "Table ID"
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /tables/{id}/detail [get]
+func GetTableDetail(c *gin.Context) {
+	tableID, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+	var table models.Table
+	if err := config.GetDB().First(&table, tableID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy bàn", "TABLE_NOT_FOUND", "")
+		return
+	}
+
+	// Kiểm tra quyền
+	currentRestaurantID, _ := c.Get("restaurant_id")
+	role, _ := c.Get("role")
+
+	if role != "admin" && (currentRestaurantID == nil || table.RestaurantID != *currentRestaurantID.(*uint)) {
+		utils.ErrorResponse(c, http.StatusForbidden, "Bạn không có quyền xem bàn này", "FORBIDDEN", "")
+		return
+	}
+
+	// Lấy đơn hàng đang hoạt động của bàn (chưa completed, chưa cancelled)
+	var activeOrders []models.Order
+	config.GetDB().
+		Preload("Items").
+		Preload("OrderItems.MenuItem").
+		Where("table_id = ? AND status NOT IN ?", tableID, []string{"completed", "cancelled"}).
+		Order("created_at DESC").
+		Find(&activeOrders)
+
+	// Format orders với chi tiết từng món
+	var ordersData []gin.H
+	for _, order := range activeOrders {
+		var itemsData []gin.H
+		for _, item := range order.OrderItems {
+			itemData := gin.H{
+				"id":         item.ID,
+				"quantity":   item.Quantity,
+				"item_name":  item.ItemName,
+				"item_price": item.ItemPrice,
+				"line_total": item.LineTotal,
+				"notes":      item.Notes,
+				"prep_status": item.PrepStatus,
+			}
+			if item.MenuItem != nil {
+				itemData["menu_item"] = gin.H{
+					"id":    item.MenuItem.ID,
+					"name":  item.MenuItem.Name,
+					"image": item.MenuItem.Image,
+					"price": item.MenuItem.Price,
+				}
+			}
+			itemsData = append(itemsData, itemData)
+		}
+
+		ordersData = append(ordersData, gin.H{
+			"id":             order.ID,
+			"order_number":   order.OrderNumber,
+			"status":         order.Status,
+			"payment_status": order.PaymentStatus,
+			"payment_method": order.PaymentMethod,
+			"total_amount":   order.TotalAmount,
+			"notes":          order.Notes,
+			"created_at":     order.CreatedAt,
+			"items":          itemsData,
+			"items_count":    len(order.OrderItems),
+		})
+	}
+
+	// Tính tổng tiền các order đang hoạt động
+	var totalAmount float64
+	for _, order := range activeOrders {
+		totalAmount += order.TotalAmount
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"table": gin.H{
+			"id":           table.ID,
+			"table_number": table.TableNumber,
+			"name":         table.Name,
+			"capacity":     table.Capacity,
+			"status":       table.Status,
+			"is_active":    table.IsActive,
+		},
+		"active_orders":       ordersData,
+		"active_orders_count": len(activeOrders),
+		"total_amount":        totalAmount,
+	}, "")
+}
