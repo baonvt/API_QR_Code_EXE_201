@@ -80,20 +80,31 @@ func GetMyRestaurant(c *gin.Context) {
 		return
 	}
 
+	// Lấy user_id từ context
+	userID, _ := c.Get("user_id")
+
 	var restaurant models.Restaurant
 	if err := config.GetDB().Preload("Package").First(&restaurant, restaurantID).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy nhà hàng", "RESTAURANT_NOT_FOUND", "")
 		return
 	}
 
+	// Lấy thông tin owner
+	var owner models.User
+	config.GetDB().First(&owner, userID)
+
 	utils.SuccessResponse(c, http.StatusOK, gin.H{
 		"id":               restaurant.ID,
-		"name":             restaurant.Name,
+		"name":             owner.Name,
+		"email":            owner.Email,
+		"phone":            owner.Phone,
+		"avatar":           owner.Avatar,
+		"role":             owner.Role,
+		"restaurantId":     restaurant.ID,
+		"restaurantName":   restaurant.Name,
 		"slug":             restaurant.Slug,
 		"description":      restaurant.Description,
 		"logo":             restaurant.Logo,
-		"phone":            restaurant.Phone,
-		"email":            restaurant.Email,
 		"address":          restaurant.Address,
 		"is_open":          restaurant.IsOpen,
 		"tax_rate":         restaurant.TaxRate,

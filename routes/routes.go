@@ -37,6 +37,7 @@ func SetupRoutes(router *gin.Engine) {
 		{
 			auth.POST("/login", handlers.Login)
 			auth.POST("/register", handlers.Register)
+			auth.POST("/check-email", handlers.CheckEmail)
 
 			// Protected auth routes
 			authProtected := auth.Group("")

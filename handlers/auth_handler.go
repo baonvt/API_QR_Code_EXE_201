@@ -270,6 +270,49 @@ func GetMe(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, response, "")
 }
 
+// CheckEmailInput request body cho check email
+type CheckEmailInput struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// CheckEmail kiểm tra email đã tồn tại chưa
+// @Summary Kiểm tra email
+// @Description Kiểm tra email đã được đăng ký chưa
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param check body CheckEmailInput true "Email cần kiểm tra"
+// @Success 200 {object} map[string]interface{}
+// @Router /auth/check-email [post]
+func CheckEmail(c *gin.Context) {
+	var input CheckEmailInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Email không hợp lệ", "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	db := config.GetDB()
+
+	// Kiểm tra email đã tồn tại trong users chưa
+	var existingUser models.User
+	if err := db.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
+		utils.ErrorResponse(c, http.StatusConflict, "Email đã được sử dụng", "EMAIL_EXISTS", "")
+		return
+	}
+
+	// Kiểm tra email có pending subscription không (đã đăng ký nhưng chưa thanh toán)
+	var existingSub models.PackageSubscription
+	if err := db.Where("email = ? AND payment_status = ?", input.Email, "pending").First(&existingSub).Error; err == nil {
+		// Nếu chưa hết hạn, vẫn cho phép (user có thể quay lại thanh toán)
+		// Chỉ báo lỗi nếu đã được sử dụng bởi user thực
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"available": true,
+		"email":     input.Email,
+	}, "Email có thể sử dụng")
+}
+
 // RefreshToken làm mới token
 // @Summary Làm mới token
 // @Description Lấy token mới từ token hiện tại
