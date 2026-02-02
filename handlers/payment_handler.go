@@ -29,8 +29,8 @@ type SepayWebhookPayload struct {
 	TransferAmount     float64 `json:"transferAmount"`
 	Accumulated        float64 `json:"accumulated"`
 	Code               *string `json:"code"`
-	TransactionContent string  `json:"transactionContent"`
-	ReferenceNumber    string  `json:"referenceNumber"`
+	TransactionContent string  `json:"content"`          // SePay gửi "content" không phải "transactionContent"
+	ReferenceNumber    string  `json:"referenceCode"`    // SePay gửi "referenceCode" không phải "referenceNumber"
 	Description        string  `json:"description"`
 }
 
