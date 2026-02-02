@@ -52,9 +52,53 @@ func CreateSubscription(input CreateSubscriptionInput) (*SubscriptionResult, err
 	// Kiểm tra email đã có subscription pending chưa
 	var existingSub models.PackageSubscription
 	if err := db.Where("email = ? AND payment_status = ?", input.Email, "pending").First(&existingSub).Error; err == nil {
-		// Nếu chưa hết hạn, trả về subscription cũ
+		// Nếu chưa hết hạn
 		if existingSub.ExpiresAt.After(time.Now()) {
-			// Lấy package info
+			// 🔥 FIX: Nếu user chọn gói KHÁC, cập nhật subscription thay vì trả về cũ
+			if existingSub.PackageID != input.PackageID || existingSub.BillingCycle != input.BillingCycle {
+				// Lấy thông tin gói mới
+				var newPkg models.Package
+				if err := db.First(&newPkg, input.PackageID).Error; err != nil {
+					return nil, fmt.Errorf("INVALID_PACKAGE: Gói dịch vụ không tồn tại")
+				}
+
+				// Tính số tiền mới
+				var newAmount float64
+				billingCycle := input.BillingCycle
+				if billingCycle == "yearly" {
+					newAmount = newPkg.YearlyPrice
+				} else {
+					newAmount = newPkg.MonthlyPrice
+					billingCycle = "monthly"
+				}
+
+				// Cập nhật subscription với gói mới
+				newExpiresAt := time.Now().Add(30 * time.Minute)
+				db.Model(&existingSub).Updates(map[string]interface{}{
+					"package_id":    input.PackageID,
+					"billing_cycle": billingCycle,
+					"amount":        newAmount,
+					"expires_at":    newExpiresAt,
+				})
+
+				// Tạo QR mới với số tiền mới
+				qr := GenerateAdminQR(newAmount, existingSub.PaymentCode)
+
+				log.Printf("🔄 Updated subscription %d: package %d -> %d, amount %.0f -> %.0f",
+					existingSub.ID, existingSub.PackageID, input.PackageID, existingSub.Amount, newAmount)
+
+				return &SubscriptionResult{
+					SubscriptionID: existingSub.ID,
+					PaymentCode:    existingSub.PaymentCode,
+					Amount:         newAmount,
+					PackageName:    newPkg.DisplayName,
+					QRCode:         qr,
+					ExpiresAt:      newExpiresAt,
+					ExpiresInMins:  30,
+				}, nil
+			}
+
+			// Nếu cùng gói, trả về subscription cũ
 			var pkg models.Package
 			db.First(&pkg, existingSub.PackageID)
 
