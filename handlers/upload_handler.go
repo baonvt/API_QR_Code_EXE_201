@@ -116,13 +116,18 @@ func UploadImage(c *gin.Context) {
 
 	// Tạo URL để truy cập ảnh
 	// URL format: /assets/img/{user_id}/{folder}/{filename}
-	imageURL := fmt.Sprintf("/assets/img/%s/%s/%s", userIDStr, folder, filename)
+	relativePath := fmt.Sprintf("/assets/img/%s/%s/%s", userIDStr, folder, filename)
+
+	// Tạo full URL với domain
+	baseURL := "https://apiqrcodeexe201-production.up.railway.app"
+	fullURL := baseURL + relativePath
 
 	// Lấy thông tin file
 	fileInfo, _ := os.Stat(filePath)
 
 	utils.SuccessResponse(c, http.StatusOK, gin.H{
-		"url":      imageURL,
+		"url":      fullURL,
+		"path":     relativePath,
 		"filename": filename,
 		"folder":   folder,
 		"size":     fileInfo.Size(),
@@ -228,11 +233,14 @@ func UploadMultipleImages(c *gin.Context) {
 			continue
 		}
 
-		imageURL := fmt.Sprintf("/assets/img/%s/%s/%s", userIDStr, folder, filename)
+		baseURL := "https://apiqrcodeexe201-production.up.railway.app"
+		relativePath := fmt.Sprintf("/assets/img/%s/%s/%s", userIDStr, folder, filename)
+		fullURL := baseURL + relativePath
 		results = append(results, gin.H{
 			"original_name": fileHeader.Filename,
 			"filename":      filename,
-			"url":           imageURL,
+			"url":           fullURL,
+			"path":          relativePath,
 		})
 	}
 

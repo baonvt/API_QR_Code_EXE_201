@@ -101,8 +101,9 @@ func Login(c *gin.Context) {
 			"role":   user.Role,
 			"avatar": user.Avatar,
 		},
-		"access_token": token,
-		"expires_in":   86400,
+		"restaurant_id": restaurantID,
+		"access_token":  token,
+		"expires_in":    86400,
 	}, "Đăng nhập thành công")
 }
 
