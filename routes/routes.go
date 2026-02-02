@@ -54,6 +54,31 @@ func SetupRoutes(router *gin.Engine) {
 		api.GET("/packages", handlers.GetPackages)
 
 		// ================================
+		// WEBHOOKS - Public (SePay callback)
+		// ================================
+		webhooks := api.Group("/webhooks")
+		{
+			webhooks.POST("/sepay", handlers.HandleSepayWebhook)
+		}
+
+		// ================================
+		// PAYMENT - Public (Đăng ký + Thanh toán)
+		// ================================
+		payment := api.Group("/payment")
+		{
+			// Đăng ký gói mới + nhận QR thanh toán
+			payment.POST("/subscribe", handlers.CreateSubscription)
+			// Kiểm tra trạng thái đăng ký
+			payment.GET("/subscribe/:code/status", handlers.GetSubscriptionStatus)
+			// Lấy lại QR code
+			payment.GET("/subscribe/:code/qr", handlers.GetSubscriptionQR)
+			// Tạo QR thanh toán đơn hàng
+			payment.POST("/orders/:id/qr", handlers.CreateOrderPaymentQR)
+			// Kiểm tra trạng thái thanh toán đơn hàng
+			payment.GET("/orders/:id/status", handlers.GetOrderPaymentStatus)
+		}
+
+		// ================================
 		// PUBLIC - Customer routes (by slug)
 		// ================================
 		public := api.Group("/public")
@@ -102,6 +127,12 @@ func SetupRoutes(router *gin.Engine) {
 				// Payment Settings
 				restaurantsProtected.GET("/:id/payment-settings", handlers.GetPaymentSettings)
 				restaurantsProtected.PUT("/:id/payment-settings", handlers.UpdatePaymentSettings)
+
+				// SePay Linking (Restaurant nhận tiền từ khách)
+				restaurantsProtected.POST("/:id/sepay/link", handlers.LinkSepayAccount)
+				restaurantsProtected.GET("/:id/sepay/link/check", handlers.CheckSepayLinkingSession)
+				restaurantsProtected.GET("/:id/sepay/status", handlers.GetSepayStatus)
+				restaurantsProtected.DELETE("/:id/sepay/unlink", handlers.UnlinkSepayAccount)
 
 				// Statistics
 				restaurantsProtected.GET("/:id/stats/overview", handlers.GetStatsOverview)

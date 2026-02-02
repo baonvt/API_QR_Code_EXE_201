@@ -42,6 +42,9 @@ func main() {
 	// Kết nối database
 	config.ConnectDatabase()
 
+	// Load SePay config
+	config.LoadSepayConfig()
+
 	// Chạy migrations
 	if err := config.RunMigrations(); err != nil {
 		log.Fatal("Failed to run migrations:", err)

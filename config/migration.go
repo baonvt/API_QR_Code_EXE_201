@@ -15,15 +15,17 @@ func RunMigrations() error {
 
 	// Migrate theo thứ tự để đảm bảo foreign key constraints
 	err := db.AutoMigrate(
-		&models.User{},           // 1. Users (base table)
-		&models.Package{},        // 2. Packages (base table)
-		&models.Restaurant{},     // 3. Restaurants (depends on users, packages)
-		&models.PaymentSetting{}, // 4. Payment Settings (depends on restaurants)
-		&models.Table{},          // 5. Tables (depends on restaurants)
-		&models.Category{},       // 6. Categories (depends on restaurants)
-		&models.MenuItem{},       // 7. Menu Items (depends on restaurants, categories)
-		&models.Order{},          // 8. Orders (depends on restaurants, tables)
-		&models.OrderItem{},      // 9. Order Items (depends on orders, menu_items)
+		&models.User{},                // 1. Users (base table)
+		&models.Package{},             // 2. Packages (base table)
+		&models.Restaurant{},          // 3. Restaurants (depends on users, packages)
+		&models.PaymentSetting{},      // 4. Payment Settings (depends on restaurants)
+		&models.Table{},               // 5. Tables (depends on restaurants)
+		&models.Category{},            // 6. Categories (depends on restaurants)
+		&models.MenuItem{},            // 7. Menu Items (depends on restaurants, categories)
+		&models.Order{},               // 8. Orders (depends on restaurants, tables)
+		&models.OrderItem{},           // 9. Order Items (depends on orders, menu_items)
+		&models.PackageSubscription{}, // 10. Package Subscriptions (depends on packages)
+		&models.PaymentTransaction{},  // 11. Payment Transactions (standalone)
 	)
 
 	if err != nil {

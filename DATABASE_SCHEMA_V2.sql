@@ -1,3 +1,4 @@
+-- Active: 1769795738191@@shinkansen.proxy.rlwy.net@18641@postgres@public
 -- ================================================================
 -- HỆ THỐNG QUẢN LÝ NHÀ HÀNG - DATABASE SCHEMA V2
 -- SQL Server
@@ -175,6 +176,7 @@ CREATE TABLE payment_settings (
     
     -- Thông tin ngân hàng
     bank_name NVARCHAR(100) NULL,
+    bank_code NVARCHAR(20) NULL,                 -- Mã ngân hàng: MB, VCB, TCB, ACB...
     account_number NVARCHAR(50) NULL,
     account_name NVARCHAR(255) NULL,
     
@@ -186,6 +188,11 @@ CREATE TABLE payment_settings (
     accept_qr BIT DEFAULT 0,
     accept_momo BIT DEFAULT 0,
     accept_vnpay BIT DEFAULT 0,
+    
+    -- SePay Integration (cho nhà hàng liên kết SePay)
+    sepay_linked BIT DEFAULT 0,                  -- Đã liên kết SePay chưa
+    sepay_bank_account_id NVARCHAR(100) NULL,   -- ID tài khoản bank trên SePay
+    sepay_linked_at DATETIME2 NULL,
     
     created_at DATETIME2 DEFAULT GETDATE(),
     updated_at DATETIME2 DEFAULT GETDATE(),
@@ -335,8 +342,12 @@ CREATE TABLE orders (
     -- Thanh toán
     payment_timing NVARCHAR(10) DEFAULT 'after', -- 'before', 'after'
     payment_method NVARCHAR(20) NULL,            -- 'cash', 'qr', 'momo', 'vnpay'
-    payment_status NVARCHAR(20) DEFAULT 'unpaid', -- 'unpaid', 'paid'
+    payment_status NVARCHAR(20) DEFAULT 'unpaid', -- 'unpaid', 'pending', 'paid'
     paid_at DATETIME2 NULL,
+    
+    -- Payment tracking (cho QR payment)
+    payment_code NVARCHAR(50) NULL,              -- Code cho QR: ORD20260015
+    payment_expires_at DATETIME2 NULL,           -- QR hết hạn
     
     -- Tính tiền
     subtotal DECIMAL(12,0) DEFAULT 0,            -- Tạm tính
@@ -530,6 +541,104 @@ BEGIN
         updated_at = GETDATE()
     WHERE id = @order_id;
 END;
+GO
+
+-- ================================================================
+-- 10. BẢNG ĐĂNG KÝ GÓI PENDING (package_subscriptions)
+-- Ưu tiên: ★★★★☆ (Quan trọng - Payment)
+-- ================================================================
+/*
+Mô tả: Lưu thông tin đăng ký gói đang chờ thanh toán
+- Khi user đăng ký -> Tạo record pending
+- Sau khi thanh toán -> Tạo user + restaurant thật
+*/
+CREATE TABLE package_subscriptions (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    
+    -- Thông tin user (chưa tạo chính thức)
+    email NVARCHAR(255) NOT NULL,
+    password_hash NVARCHAR(255) NOT NULL,
+    name NVARCHAR(255) NOT NULL,
+    phone NVARCHAR(20) NULL,
+    restaurant_name NVARCHAR(255) NOT NULL,
+    
+    -- Package info
+    package_id INT NOT NULL,
+    billing_cycle NVARCHAR(20) NOT NULL,         -- 'monthly', 'yearly'
+    amount DECIMAL(12,0) NOT NULL,
+    
+    -- Payment tracking
+    payment_code NVARCHAR(100) NOT NULL UNIQUE,  -- "PKG{id}{timestamp}"
+    payment_status NVARCHAR(20) DEFAULT 'pending', -- 'pending', 'paid', 'expired', 'cancelled'
+    qr_content NVARCHAR(500) NULL,
+    
+    -- Kết quả sau khi thanh toán
+    user_id INT NULL,                            -- FK sau khi tạo user
+    restaurant_id INT NULL,                      -- FK sau khi tạo restaurant
+    
+    expires_at DATETIME2 NOT NULL,               -- QR hết hạn sau 30 phút
+    paid_at DATETIME2 NULL,
+    
+    created_at DATETIME2 DEFAULT GETDATE(),
+    updated_at DATETIME2 DEFAULT GETDATE(),
+    
+    CONSTRAINT FK_package_subscriptions_package FOREIGN KEY (package_id) REFERENCES packages(id)
+);
+GO
+
+CREATE INDEX IX_package_subscriptions_code ON package_subscriptions(payment_code);
+CREATE INDEX IX_package_subscriptions_email ON package_subscriptions(email);
+CREATE INDEX IX_package_subscriptions_status ON package_subscriptions(payment_status);
+GO
+
+-- ================================================================
+-- 11. BẢNG GIAO DỊCH THANH TOÁN (payment_transactions)
+-- Ưu tiên: ★★★★☆ (Quan trọng - Payment)
+-- ================================================================
+/*
+Mô tả: Lưu tất cả giao dịch thanh toán từ SePay webhook
+- transaction_type: 'package' (đăng ký gói), 'order' (thanh toán đơn hàng)
+*/
+CREATE TABLE payment_transactions (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    
+    -- Loại giao dịch
+    transaction_type NVARCHAR(20) NOT NULL,      -- 'package', 'order'
+    
+    -- Reference
+    reference_id INT NOT NULL,                   -- package_subscription.id hoặc order.id
+    reference_code NVARCHAR(100) NOT NULL,       -- "PKG1299000" hoặc "ORD20260015"
+    
+    -- Thông tin từ SePay webhook
+    sepay_transaction_id BIGINT NULL,            -- ID giao dịch từ SePay
+    gateway NVARCHAR(50) NULL,                   -- "MBBank", "Vietcombank"...
+    transaction_date DATETIME2 NULL,
+    account_number NVARCHAR(50) NULL,
+    sub_account NVARCHAR(50) NULL,
+    transfer_type NVARCHAR(10) NULL,             -- 'in', 'out'
+    transfer_amount DECIMAL(12,0) NOT NULL,
+    accumulated DECIMAL(12,0) NULL,
+    code NVARCHAR(500) NULL,                     -- Mã giao dịch ngân hàng
+    transaction_content NVARCHAR(500) NULL,      -- Nội dung chuyển khoản
+    reference_number NVARCHAR(100) NULL,
+    description NVARCHAR(1000) NULL,
+    
+    -- Trạng thái xử lý
+    status NVARCHAR(20) DEFAULT 'pending',       -- 'pending', 'completed', 'failed', 'duplicate'
+    verified_at DATETIME2 NULL,
+    error_message NVARCHAR(500) NULL,
+    
+    -- Raw data
+    raw_webhook_data NVARCHAR(MAX) NULL,         -- JSON gốc từ SePay
+    
+    created_at DATETIME2 DEFAULT GETDATE(),
+    updated_at DATETIME2 DEFAULT GETDATE()
+);
+GO
+
+CREATE INDEX IX_payment_transactions_reference ON payment_transactions(reference_code);
+CREATE INDEX IX_payment_transactions_sepay_id ON payment_transactions(sepay_transaction_id);
+CREATE INDEX IX_payment_transactions_type ON payment_transactions(transaction_type, status);
 GO
 
 PRINT 'Database schema created successfully!';

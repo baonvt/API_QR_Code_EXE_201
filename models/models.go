@@ -97,18 +97,25 @@ func (Restaurant) TableName() string {
 
 // PaymentSetting model - Cài đặt thanh toán
 type PaymentSetting struct {
-	ID            uint      `json:"id" gorm:"primaryKey"`
-	RestaurantID  uint      `json:"restaurant_id" gorm:"uniqueIndex;not null"`
-	BankName      *string   `json:"bank_name" gorm:"size:100"`
-	AccountNumber *string   `json:"account_number" gorm:"size:50"`
-	AccountName   *string   `json:"account_name" gorm:"size:255"`
-	QRImage       *string   `json:"qr_image" gorm:"type:text"`
-	AcceptCash    bool      `json:"accept_cash" gorm:"default:true"`
-	AcceptQR      bool      `json:"accept_qr" gorm:"default:false"`
-	AcceptMomo    bool      `json:"accept_momo" gorm:"default:false"`
-	AcceptVNPay   bool      `json:"accept_vnpay" gorm:"default:false"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            uint    `json:"id" gorm:"primaryKey"`
+	RestaurantID  uint    `json:"restaurant_id" gorm:"uniqueIndex;not null"`
+	BankName      *string `json:"bank_name" gorm:"size:100"`
+	BankCode      *string `json:"bank_code" gorm:"size:20"` // MB, VCB, TCB, ACB...
+	AccountNumber *string `json:"account_number" gorm:"size:50"`
+	AccountName   *string `json:"account_name" gorm:"size:255"`
+	QRImage       *string `json:"qr_image" gorm:"type:text"`
+	AcceptCash    bool    `json:"accept_cash" gorm:"default:true"`
+	AcceptQR      bool    `json:"accept_qr" gorm:"default:false"`
+	AcceptMomo    bool    `json:"accept_momo" gorm:"default:false"`
+	AcceptVNPay   bool    `json:"accept_vnpay" gorm:"default:false"`
+
+	// SePay Integration
+	SepayLinked        bool       `json:"sepay_linked" gorm:"default:false"`
+	SepayBankAccountID *string    `json:"sepay_bank_account_id" gorm:"size:100"`
+	SepayLinkedAt      *time.Time `json:"sepay_linked_at"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	// Relationships
 	Restaurant *Restaurant `json:"restaurant,omitempty" gorm:"foreignKey:RestaurantID"`
@@ -191,17 +198,22 @@ func (MenuItem) TableName() string {
 
 // Order model - Đơn hàng
 type Order struct {
-	ID             uint       `json:"id" gorm:"primaryKey"`
-	RestaurantID   uint       `json:"restaurant_id" gorm:"not null;index"`
-	TableID        uint       `json:"table_id" gorm:"not null;index"`
-	OrderNumber    string     `json:"order_number" gorm:"size:50;not null;index"`
-	CustomerName   *string    `json:"customer_name" gorm:"size:255"`
-	CustomerPhone  *string    `json:"customer_phone" gorm:"size:20"`
-	Status         string     `json:"status" gorm:"size:20;default:'pending'"`
-	PaymentTiming  string     `json:"payment_timing" gorm:"size:10;default:'after'"`
-	PaymentMethod  *string    `json:"payment_method" gorm:"size:20"`
-	PaymentStatus  string     `json:"payment_status" gorm:"size:20;default:'unpaid'"`
-	PaidAt         *time.Time `json:"paid_at"`
+	ID            uint       `json:"id" gorm:"primaryKey"`
+	RestaurantID  uint       `json:"restaurant_id" gorm:"not null;index"`
+	TableID       uint       `json:"table_id" gorm:"not null;index"`
+	OrderNumber   string     `json:"order_number" gorm:"size:50;not null;index"`
+	CustomerName  *string    `json:"customer_name" gorm:"size:255"`
+	CustomerPhone *string    `json:"customer_phone" gorm:"size:20"`
+	Status        string     `json:"status" gorm:"size:20;default:'pending'"`
+	PaymentTiming string     `json:"payment_timing" gorm:"size:10;default:'after'"`
+	PaymentMethod *string    `json:"payment_method" gorm:"size:20"`
+	PaymentStatus string     `json:"payment_status" gorm:"size:20;default:'unpaid'"`
+	PaidAt        *time.Time `json:"paid_at"`
+
+	// Payment tracking (cho QR payment)
+	PaymentCode      *string    `json:"payment_code" gorm:"size:50;index"`
+	PaymentExpiresAt *time.Time `json:"payment_expires_at"`
+
 	Subtotal       float64    `json:"subtotal" gorm:"type:decimal(12,0);default:0"`
 	TaxAmount      float64    `json:"tax_amount" gorm:"type:decimal(12,0);default:0"`
 	ServiceCharge  float64    `json:"service_charge" gorm:"type:decimal(12,0);default:0"`
@@ -245,4 +257,67 @@ type OrderItem struct {
 
 func (OrderItem) TableName() string {
 	return "order_items"
+}
+
+// ===============================
+// PAYMENT MODELS
+// ===============================
+
+// PackageSubscription model - Đăng ký gói đang chờ thanh toán
+type PackageSubscription struct {
+	ID             uint       `json:"id" gorm:"primaryKey"`
+	Email          string     `json:"email" gorm:"size:255;not null"`
+	PasswordHash   string     `json:"-" gorm:"column:password_hash;size:255;not null"`
+	Name           string     `json:"name" gorm:"size:255;not null"`
+	Phone          *string    `json:"phone" gorm:"size:20"`
+	RestaurantName string     `json:"restaurant_name" gorm:"size:255;not null"`
+	PackageID      uint       `json:"package_id" gorm:"not null"`
+	BillingCycle   string     `json:"billing_cycle" gorm:"size:20;not null"` // monthly, yearly
+	Amount         float64    `json:"amount" gorm:"type:decimal(12,0);not null"`
+	PaymentCode    string     `json:"payment_code" gorm:"size:100;uniqueIndex;not null"`
+	PaymentStatus  string     `json:"payment_status" gorm:"size:20;default:'pending'"` // pending, paid, expired, cancelled
+	QRContent      *string    `json:"qr_content" gorm:"size:500"`
+	UserID         *uint      `json:"user_id"`
+	RestaurantID   *uint      `json:"restaurant_id"`
+	ExpiresAt      time.Time  `json:"expires_at" gorm:"not null"`
+	PaidAt         *time.Time `json:"paid_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+
+	// Relationships
+	Package *Package `json:"package,omitempty" gorm:"foreignKey:PackageID"`
+}
+
+func (PackageSubscription) TableName() string {
+	return "package_subscriptions"
+}
+
+// PaymentTransaction model - Lịch sử giao dịch thanh toán
+type PaymentTransaction struct {
+	ID                 uint       `json:"id" gorm:"primaryKey"`
+	TransactionType    string     `json:"transaction_type" gorm:"size:20;not null"` // package, order
+	ReferenceID        uint       `json:"reference_id" gorm:"not null"`
+	ReferenceCode      string     `json:"reference_code" gorm:"size:100;not null;index"`
+	SepayTransactionID *int64     `json:"sepay_transaction_id" gorm:"index"`
+	Gateway            *string    `json:"gateway" gorm:"size:50"`
+	TransactionDate    *time.Time `json:"transaction_date"`
+	AccountNumber      *string    `json:"account_number" gorm:"size:50"`
+	SubAccount         *string    `json:"sub_account" gorm:"size:50"`
+	TransferType       *string    `json:"transfer_type" gorm:"size:10"` // in, out
+	TransferAmount     float64    `json:"transfer_amount" gorm:"type:decimal(12,0);not null"`
+	Accumulated        *float64   `json:"accumulated" gorm:"type:decimal(12,0)"`
+	Code               *string    `json:"code" gorm:"size:500"`
+	TransactionContent *string    `json:"transaction_content" gorm:"size:500"`
+	ReferenceNumber    *string    `json:"reference_number" gorm:"size:100"`
+	Description        *string    `json:"description" gorm:"size:1000"`
+	Status             string     `json:"status" gorm:"size:20;default:'pending'"` // pending, completed, failed, duplicate
+	VerifiedAt         *time.Time `json:"verified_at"`
+	ErrorMessage       *string    `json:"error_message" gorm:"size:500"`
+	RawWebhookData     *string    `json:"raw_webhook_data" gorm:"type:text"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+}
+
+func (PaymentTransaction) TableName() string {
+	return "payment_transactions"
 }
