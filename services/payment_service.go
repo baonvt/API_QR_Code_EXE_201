@@ -37,6 +37,7 @@ type SubscriptionResult struct {
 	QRCode         *QRCodeResult `json:"qr_code"`
 	ExpiresAt      time.Time     `json:"expires_at"`
 	ExpiresInMins  int           `json:"expires_in_minutes"`
+	IsFree         bool          `json:"is_free"` // true nếu gói miễn phí, đã tự động kích hoạt
 }
 
 // CreateSubscription tạo đăng ký gói mới (pending payment)
@@ -169,7 +170,36 @@ func CreateSubscription(input CreateSubscriptionInput) (*SubscriptionResult, err
 		"qr_content":   qrContent,
 	})
 
-	// Tạo QR code
+	// 🆓 Nếu gói MIỄN PHÍ (0đ) -> Tự động active ngay, không cần thanh toán
+	if amount == 0 {
+		log.Printf("🆓 Free package detected! Auto-activating subscription %d", subscription.ID)
+
+		// Tạo fake transaction data
+		freeTransaction := &SepayWebhookPayload{
+			TransferAmount:     0,
+			TransactionContent: paymentCode,
+		}
+
+		// Hoàn thành subscription ngay lập tức
+		if err := CompleteSubscription(subscription.ID, freeTransaction); err != nil {
+			log.Printf("❌ Failed to auto-complete free subscription: %v", err)
+			return nil, fmt.Errorf("AUTO_ACTIVATE_ERROR: Không thể kích hoạt gói miễn phí")
+		}
+
+		// Trả về kết quả với status đã paid
+		return &SubscriptionResult{
+			SubscriptionID: subscription.ID,
+			PaymentCode:    paymentCode,
+			Amount:         0,
+			PackageName:    pkg.DisplayName,
+			QRCode:         nil, // Không cần QR
+			ExpiresAt:      time.Now(),
+			ExpiresInMins:  0,
+			IsFree:         true, // Flag để frontend biết là gói free
+		}, nil
+	}
+
+	// Tạo QR code cho gói có phí
 	qr := GenerateAdminQR(amount, paymentCode)
 
 	return &SubscriptionResult{
