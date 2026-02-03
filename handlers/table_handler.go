@@ -238,8 +238,21 @@ func UpdateTable(c *gin.Context) {
 			return
 		}
 
-		// Nếu chuyển về available (đóng bàn), tự động complete các đơn hàng active
+		// Nếu chuyển về available (đóng bàn):
+		// - Kiểm tra tất cả đơn hàng phải đã thanh toán
+		// - Nếu có đơn chưa thanh toán => báo lỗi
 		if input.Status == "available" {
+			var unpaidCount int64
+			config.GetDB().Model(&models.Order{}).
+				Where("table_id = ? AND status IN ? AND payment_status != ?", tableID, []string{"pending", "confirmed", "preparing"}, "paid").
+				Count(&unpaidCount)
+
+			if unpaidCount > 0 {
+				utils.ErrorResponse(c, http.StatusBadRequest, "Vui lòng xác nhận thanh toán tất cả đơn hàng trước khi đóng bàn", "UNPAID_ORDERS", "")
+				return
+			}
+
+			// Tất cả đơn đã paid -> complete orders
 			config.GetDB().Model(&models.Order{}).
 				Where("table_id = ? AND status IN ?", tableID, []string{"pending", "confirmed", "preparing"}).
 				Updates(map[string]interface{}{
