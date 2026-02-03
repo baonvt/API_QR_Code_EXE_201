@@ -321,3 +321,27 @@ type PaymentTransaction struct {
 func (PaymentTransaction) TableName() string {
 	return "payment_transactions"
 }
+
+// ===============================
+// NOTIFICATION MODEL
+// ===============================
+
+// Notification model - Thông báo cho nhà hàng
+type Notification struct {
+	ID           uint       `json:"id" gorm:"primaryKey"`
+	RestaurantID uint       `json:"restaurant_id" gorm:"not null;index"`
+	Type         string     `json:"type" gorm:"size:50;not null"` // new_order, payment_pending, order_cancelled, system_error, system_success
+	Title        string     `json:"title" gorm:"size:255;not null"`
+	Message      string     `json:"message" gorm:"size:1000;not null"`
+	Data         *string    `json:"data" gorm:"type:text"` // JSON data (order_id, table_id, etc.)
+	IsRead       bool       `json:"is_read" gorm:"default:false"`
+	ReadAt       *time.Time `json:"read_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+
+	// Relationships
+	Restaurant *Restaurant `json:"restaurant,omitempty" gorm:"foreignKey:RestaurantID"`
+}
+
+func (Notification) TableName() string {
+	return "notifications"
+}

@@ -231,6 +231,72 @@ func GetOrder(c *gin.Context) {
 	}, "")
 }
 
+// TrackOrder - Khách hàng theo dõi đơn hàng qua order number
+// @Summary Theo dõi đơn hàng
+// @Description Khách hàng xem trạng thái đơn hàng và thông tin thanh toán
+// @Tags Public
+// @Accept json
+// @Produce json
+// @Param orderNumber path string true "Mã đơn hàng"
+// @Success 200 {object} map[string]interface{}
+// @Router /public/orders/{orderNumber}/track [get]
+func TrackOrder(c *gin.Context) {
+	orderNumber := c.Param("orderNumber")
+
+	var order models.Order
+	if err := config.GetDB().
+		Preload("Table").
+		Preload("OrderItems").
+		Preload("OrderItems.MenuItem").
+		Where("order_number = ?", orderNumber).
+		First(&order).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND", "")
+		return
+	}
+
+	// Lấy thông tin nhà hàng để lấy QR thanh toán
+	var restaurant models.Restaurant
+	config.GetDB().First(&restaurant, order.RestaurantID)
+
+	// Build items response
+	var items []gin.H
+	for _, item := range order.OrderItems {
+		items = append(items, gin.H{
+			"id":       item.ID,
+			"name":     item.ItemName,
+			"price":    item.ItemPrice,
+			"quantity": item.Quantity,
+			"notes":    item.Notes,
+		})
+	}
+
+	tableName := ""
+	tableNumber := 0
+	if order.Table != nil {
+		if order.Table.Name != nil {
+			tableName = *order.Table.Name
+		}
+		tableNumber = order.Table.TableNumber
+	}
+
+	// Response
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"order_number":   order.OrderNumber,
+		"status":         order.Status,
+		"payment_status": order.PaymentStatus,
+		"payment_method": order.PaymentMethod,
+		"total_amount":   order.TotalAmount,
+		"table_name":     tableName,
+		"table_number":   tableNumber,
+		"items":          items,
+		"created_at":     order.CreatedAt,
+		"restaurant": gin.H{
+			"name": restaurant.Name,
+			"slug": restaurant.Slug,
+		},
+	}, "")
+}
+
 // CreateOrder tạo đơn hàng mới (Customer - Public)
 // @Summary Tạo đơn hàng mới
 // @Description Khách hàng tạo đơn và thanh toán luôn
@@ -293,8 +359,10 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// Tạo order - Khách order = thanh toán luôn
-	now := time.Now()
+	// Tạo order - Khách order = chờ thanh toán (LUỒNG MỚI)
+	// Status: pending (chờ xác nhận)
+	// Payment: unpaid (chưa thanh toán)
+	// Bàn: KHÔNG chiếm (vẫn available cho đến khi nhà hàng xác nhận thanh toán)
 	paymentMethod := input.PaymentMethod
 	order := models.Order{
 		RestaurantID:  restaurant.ID,
@@ -302,11 +370,10 @@ func CreateOrder(c *gin.Context) {
 		OrderNumber:   orderNumber,
 		CustomerName:  &input.CustomerName,
 		CustomerPhone: &input.CustomerPhone,
-		Status:        "confirmed", // Đã xác nhận luôn
-		PaymentTiming: "before",    // Thanh toán trước
-		PaymentStatus: "paid",      // Đã thanh toán
+		Status:        "pending", // Chờ xác nhận
+		PaymentTiming: "before",  // Thanh toán trước
+		PaymentStatus: "unpaid",  // Chưa thanh toán
 		PaymentMethod: &paymentMethod,
-		PaidAt:        &now,
 		Notes:         &input.Notes,
 	}
 
@@ -338,8 +405,8 @@ func CreateOrder(c *gin.Context) {
 			Quantity:        itemInput.Quantity,
 			SelectedOptions: &itemInput.SelectedOptions,
 			Notes:           &itemInput.Notes,
-			PrepStatus:      "confirmed", // Không cần bếp - xác nhận luôn
-			PrepLocation:    "service",   // Phục vụ trực tiếp
+			PrepStatus:      "pending", // Chờ xác nhận
+			PrepLocation:    menuItem.PrepLocation,
 			LineTotal:       lineTotal,
 		}
 
@@ -355,7 +422,7 @@ func CreateOrder(c *gin.Context) {
 	serviceCharge := subtotal * restaurant.ServiceCharge / 100
 	totalAmount := subtotal + taxAmount + serviceCharge
 
-	// Cập nhật order
+	// Cập nhật order với tổng tiền
 	tx.Model(&order).Updates(map[string]interface{}{
 		"subtotal":       subtotal,
 		"tax_amount":     taxAmount,
@@ -363,18 +430,27 @@ func CreateOrder(c *gin.Context) {
 		"total_amount":   totalAmount,
 	})
 
-	// Cập nhật trạng thái bàn
-	tx.Model(&table).Update("status", "occupied")
+	// KHÔNG cập nhật trạng thái bàn - bàn vẫn trống cho đến khi xác nhận thanh toán
+	// tx.Model(&table).Update("status", "occupied") -- BỎ DÒNG NÀY
 
 	tx.Commit()
 
+	// Tạo thông báo cho nhà hàng
+	tableName := "Bàn " + strconv.Itoa(table.TableNumber)
+	if table.Name != nil {
+		tableName = *table.Name
+	}
+	CreateOrderNotification(restaurant.ID, order.ID, orderNumber, tableName, totalAmount)
+
 	utils.SuccessResponse(c, http.StatusCreated, gin.H{
-		"id":           order.ID,
-		"order_number": orderNumber,
-		"status":       order.Status,
-		"total_amount": totalAmount,
-		"tracking_url": "/" + slug + "/order/" + strconv.Itoa(int(order.ID)),
-	}, "Đơn hàng đã được gửi thành công!")
+		"id":             order.ID,
+		"order_number":   orderNumber,
+		"status":         order.Status,
+		"payment_status": order.PaymentStatus,
+		"total_amount":   totalAmount,
+		"tracking_url":   "/" + slug + "/order/" + strconv.Itoa(int(order.ID)),
+		"message":        "Vui lòng thanh toán để hoàn tất đơn hàng",
+	}, "Đơn hàng đã được tạo. Vui lòng thanh toán!")
 }
 
 // UpdateOrderStatus cập nhật trạng thái đơn hàng
@@ -539,6 +615,79 @@ func PayOrder(c *gin.Context) {
 		"paid_at":        now,
 		"total_amount":   order.TotalAmount,
 	}, "Thanh toán thành công!")
+}
+
+// ConfirmOrderPayment xác nhận thanh toán đơn hàng (nhà hàng bấm tích)
+// @Summary Xác nhận đã nhận thanh toán
+// @Description Nhà hàng xác nhận đã nhận được tiền từ khách, đơn chuyển sang confirmed và bàn được chiếm
+// @Tags Orders
+// @Accept json
+// @Produce json
+// @Param id path int true "Order ID"
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /orders/{id}/confirm-payment [put]
+func ConfirmOrderPayment(c *gin.Context) {
+	orderID, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+	var order models.Order
+	if err := config.GetDB().Preload("Table").First(&order, orderID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND", "")
+		return
+	}
+
+	// Kiểm tra quyền
+	currentRestaurantID, _ := c.Get("restaurant_id")
+	role, _ := c.Get("role")
+
+	if role != "admin" && (currentRestaurantID == nil || order.RestaurantID != *currentRestaurantID.(*uint)) {
+		utils.ErrorResponse(c, http.StatusForbidden, "Bạn không có quyền xác nhận đơn hàng này", "FORBIDDEN", "")
+		return
+	}
+
+	if order.PaymentStatus == "paid" && order.Status != "pending" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Đơn hàng đã được xác nhận thanh toán", "ALREADY_CONFIRMED", "")
+		return
+	}
+
+	db := config.GetDB()
+	tx := db.Begin()
+
+	now := time.Now()
+
+	// Cập nhật order: payment_status = paid, status = confirmed
+	if err := tx.Model(&order).Updates(map[string]interface{}{
+		"payment_status": "paid",
+		"status":         "confirmed",
+		"paid_at":        now,
+	}).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể xác nhận thanh toán", "UPDATE_ERROR", err.Error())
+		return
+	}
+
+	// Cập nhật trạng thái order items
+	tx.Model(&models.OrderItem{}).Where("order_id = ?", order.ID).Update("prep_status", "confirmed")
+
+	// Cập nhật trạng thái bàn thành occupied
+	if order.Table != nil {
+		tx.Model(&models.Table{}).Where("id = ?", order.TableID).Update("status", "occupied")
+	}
+
+	tx.Commit()
+
+	// Tạo thông báo thành công
+	CreateSystemNotification(order.RestaurantID, "system_success", "Thanh toán đã xác nhận", "Đơn #"+order.OrderNumber+" đã được xác nhận thanh toán")
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"order_id":       order.ID,
+		"order_number":   order.OrderNumber,
+		"status":         "confirmed",
+		"payment_status": "paid",
+		"paid_at":        now,
+		"total_amount":   order.TotalAmount,
+		"table_status":   "occupied",
+	}, "Xác nhận thanh toán thành công! Đơn hàng đã được xác nhận.")
 }
 
 // AddOrderItems thêm món vào đơn hàng hiện tại

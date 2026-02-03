@@ -92,6 +92,8 @@ func SetupRoutes(router *gin.Engine) {
 			public.GET("/restaurants/:slug/tables/:tableNumber", handlers.GetTableBySlugAndNumber)
 			// Customer tạo đơn hàng
 			public.POST("/restaurants/:slug/orders", handlers.CreateOrder)
+			// Customer tracking đơn hàng (by order number)
+			public.GET("/orders/:orderNumber/track", handlers.TrackOrder)
 		}
 
 		// ================================
@@ -141,6 +143,10 @@ func SetupRoutes(router *gin.Engine) {
 				restaurantsProtected.GET("/:id/stats/overview", handlers.GetStatsOverview)
 				restaurantsProtected.GET("/:id/stats/revenue", handlers.GetStatsRevenue)
 				restaurantsProtected.GET("/:id/stats/menu", handlers.GetStatsMenu)
+
+				// Notifications
+				restaurantsProtected.GET("/:id/notifications", handlers.GetNotifications)
+				restaurantsProtected.GET("/:id/notifications/unread-count", handlers.GetUnreadNotificationCount)
 			}
 		}
 
@@ -204,7 +210,22 @@ func SetupRoutes(router *gin.Engine) {
 				ordersProtected.PUT("/:id/status", handlers.UpdateOrderStatus)
 				ordersProtected.PUT("/:id/pay", handlers.PayOrder)
 				ordersProtected.GET("/:id/bill", handlers.GetOrderBill)
+				// Xác nhận đã thanh toán (nhà hàng bấm xác nhận)
+				ordersProtected.PUT("/:id/confirm-payment", handlers.ConfirmOrderPayment)
 			}
+		}
+
+		// ================================
+		// NOTIFICATIONS - Protected
+		// ================================
+		notifications := api.Group("/notifications")
+		notifications.Use(middleware.AuthMiddleware())
+		notifications.Use(middleware.RestaurantOrAdmin())
+		{
+			notifications.PUT("/:id/read", handlers.MarkNotificationRead)
+			notifications.PUT("/read-all", handlers.MarkAllNotificationsRead)
+			notifications.DELETE("/:id", handlers.DeleteNotification)
+			notifications.DELETE("/clear", handlers.ClearAllNotifications)
 		}
 
 		// ================================

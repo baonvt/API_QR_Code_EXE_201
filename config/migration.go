@@ -26,6 +26,7 @@ func RunMigrations() error {
 		&models.OrderItem{},           // 9. Order Items (depends on orders, menu_items)
 		&models.PackageSubscription{}, // 10. Package Subscriptions (depends on packages)
 		&models.PaymentTransaction{},  // 11. Payment Transactions (standalone)
+		&models.Notification{},        // 12. Notifications (depends on restaurants)
 	)
 
 	if err != nil {
