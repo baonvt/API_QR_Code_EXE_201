@@ -258,6 +258,7 @@ func SetupRoutes(router *gin.Engine) {
 			// Packages management
 			admin.POST("/packages", handlers.CreatePackage)
 			admin.PUT("/packages/:id", handlers.UpdatePackage)
+			admin.POST("/packages/reseed", handlers.ReseedPackages)
 
 			// Stats
 			admin.GET("/stats", handlers.GetAdminStats)

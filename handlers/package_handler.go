@@ -193,6 +193,45 @@ func UpdatePackage(c *gin.Context) {
 	}, "Cập nhật gói thành công")
 }
 
+// ReseedPackages xóa và tạo lại tất cả packages (Admin)
+// @Summary Reseed packages
+// @Description Admin xóa tất cả packages cũ và tạo lại packages mới
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /admin/packages/reseed [post]
+func ReseedPackages(c *gin.Context) {
+	if err := config.ReseedPackages(); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể reseed packages", "RESEED_ERROR", err.Error())
+		return
+	}
+
+	// Lấy danh sách packages mới
+	var packages []models.Package
+	config.GetDB().Where("is_active = ?", true).Order("sort_order ASC").Find(&packages)
+
+	var data []gin.H
+	for _, pkg := range packages {
+		data = append(data, gin.H{
+			"id":             pkg.ID,
+			"name":           pkg.Name,
+			"display_name":   pkg.DisplayName,
+			"monthly_price":  pkg.MonthlyPrice,
+			"yearly_price":   pkg.YearlyPrice,
+			"max_menu_items": pkg.MaxMenuItems,
+			"max_tables":     pkg.MaxTables,
+			"max_categories": pkg.MaxCategories,
+		})
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"message":  "Đã reseed packages thành công",
+		"packages": data,
+	}, "Reseed packages thành công")
+}
+
 // ===============================
 // PAYMENT SETTINGS HANDLERS
 // ===============================
