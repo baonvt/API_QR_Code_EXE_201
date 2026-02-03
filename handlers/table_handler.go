@@ -27,6 +27,7 @@ type UpdateTableInput struct {
 	Name     string `json:"name"`
 	Capacity int    `json:"capacity"`
 	Status   string `json:"status"`
+	IsActive *bool  `json:"is_active"` // Pointer để phân biệt false vs không gửi
 }
 
 // ===============================
@@ -239,6 +240,11 @@ func UpdateTable(c *gin.Context) {
 		updates["status"] = input.Status
 	}
 
+	// Cập nhật is_active nếu được gửi
+	if input.IsActive != nil {
+		updates["is_active"] = *input.IsActive
+	}
+
 	if err := config.GetDB().Model(&table).Updates(updates).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể cập nhật bàn", "UPDATE_ERROR", err.Error())
 		return
@@ -252,6 +258,7 @@ func UpdateTable(c *gin.Context) {
 		"name":         table.Name,
 		"capacity":     table.Capacity,
 		"status":       table.Status,
+		"is_active":    table.IsActive,
 	}, "Cập nhật bàn thành công")
 }
 
@@ -291,13 +298,24 @@ func DeleteTable(c *gin.Context) {
 		return
 	}
 
-	// Soft delete - chỉ đánh dấu is_active = false
-	if err := config.GetDB().Model(&table).Update("is_active", false).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể xóa bàn", "DELETE_ERROR", err.Error())
-		return
-	}
+	// Kiểm tra query param để xác định soft delete hay hard delete
+	hardDelete := c.Query("hard") == "true"
 
-	utils.SuccessResponse(c, http.StatusOK, nil, "Xóa bàn thành công")
+	if hardDelete {
+		// Hard delete - xóa hoàn toàn khỏi database
+		if err := config.GetDB().Unscoped().Delete(&table).Error; err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể xóa hoàn toàn bàn", "DELETE_ERROR", err.Error())
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, nil, "Đã xóa hoàn toàn bàn")
+	} else {
+		// Soft delete - chỉ đánh dấu is_active = false
+		if err := config.GetDB().Model(&table).Update("is_active", false).Error; err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể xóa bàn", "DELETE_ERROR", err.Error())
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, nil, "Đã vô hiệu hóa bàn")
+	}
 }
 
 // GetTableDetail lấy chi tiết bàn với đơn hàng đang hoạt động
@@ -394,5 +412,56 @@ func GetTableDetail(c *gin.Context) {
 		"active_orders":       ordersData,
 		"active_orders_count": len(activeOrders),
 		"total_amount":        totalAmount,
+	}, "")
+}
+
+// GetTableBySlugAndNumber lấy thông tin bàn theo slug nhà hàng và số bàn (Public)
+// @Summary Lấy bàn theo slug nhà hàng và số bàn
+// @Description Lấy thông tin bàn theo slug nhà hàng và số bàn (cho khách quét QR)
+// @Tags Public
+// @Accept json
+// @Produce json
+// @Param slug path string true "Restaurant Slug"
+// @Param tableNumber path int true "Table Number"
+// @Success 200 {object} map[string]interface{}
+// @Router /public/restaurants/{slug}/tables/{tableNumber} [get]
+func GetTableBySlugAndNumber(c *gin.Context) {
+	slug := c.Param("slug")
+	tableNumberStr := c.Param("tableNumber")
+	tableNumber, err := strconv.Atoi(tableNumberStr)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Số bàn không hợp lệ", "INVALID_TABLE_NUMBER", "")
+		return
+	}
+
+	// Tìm nhà hàng theo slug
+	var restaurant models.Restaurant
+	if err := config.GetDB().Where("slug = ? AND status = ?", slug, "active").First(&restaurant).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy nhà hàng", "RESTAURANT_NOT_FOUND", "")
+		return
+	}
+
+	// Tìm bàn theo restaurant_id và table_number
+	var table models.Table
+	if err := config.GetDB().Where("restaurant_id = ? AND table_number = ? AND is_active = ?", restaurant.ID, tableNumber, true).First(&table).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy bàn", "TABLE_NOT_FOUND", "")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"id":            table.ID,
+		"table_number":  table.TableNumber,
+		"name":          table.Name,
+		"capacity":      table.Capacity,
+		"status":        table.Status,
+		"restaurant_id": restaurant.ID,
+		"restaurant": gin.H{
+			"id":          restaurant.ID,
+			"name":        restaurant.Name,
+			"slug":        restaurant.Slug,
+			"logo":        restaurant.Logo,
+			"is_open":     restaurant.IsOpen,
+			"description": restaurant.Description,
+		},
 	}, "")
 }

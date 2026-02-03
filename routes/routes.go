@@ -88,6 +88,8 @@ func SetupRoutes(router *gin.Engine) {
 			public.GET("/restaurants/:slug", handlers.GetRestaurantBySlug)
 			// Xem menu theo slug
 			public.GET("/restaurants/:slug/menu", handlers.GetMenuBySlug)
+			// Xem bàn theo slug + số bàn (cho khách quét QR)
+			public.GET("/restaurants/:slug/tables/:tableNumber", handlers.GetTableBySlugAndNumber)
 			// Customer tạo đơn hàng
 			public.POST("/restaurants/:slug/orders", handlers.CreateOrder)
 		}
