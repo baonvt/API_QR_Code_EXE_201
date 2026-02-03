@@ -1,8 +1,12 @@
 package utils
 
 import (
+	"fmt"
+	"math/rand"
+	"net/url"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"golang.org/x/text/runes"
@@ -54,4 +58,31 @@ func StringPtr(s string) *string {
 // UintPtr trả về pointer của uint
 func UintPtr(u uint) *uint {
 	return &u
+}
+
+// GenerateRandomCode tạo mã ngẫu nhiên
+func GenerateRandomCode(length int) string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	rand.Seed(time.Now().UnixNano())
+
+	code := make([]byte, length)
+	for i := range code {
+		code[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(code)
+}
+
+// GenerateSepayQRURL tạo URL QR code VietQR qua SePay
+func GenerateSepayQRURL(bankCode, accountNumber, accountName string, amount float64, description string) string {
+	// SePay QR URL format: https://qr.sepay.vn/img?bank={bank}&acc={account}&template=compact&amount={amount}&des={description}
+	baseURL := "https://qr.sepay.vn/img"
+
+	params := url.Values{}
+	params.Add("bank", bankCode)
+	params.Add("acc", accountNumber)
+	params.Add("template", "compact")
+	params.Add("amount", fmt.Sprintf("%.0f", amount))
+	params.Add("des", description)
+
+	return baseURL + "?" + params.Encode()
 }

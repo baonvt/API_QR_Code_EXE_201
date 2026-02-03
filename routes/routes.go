@@ -147,8 +147,16 @@ func SetupRoutes(router *gin.Engine) {
 				// Notifications
 				restaurantsProtected.GET("/:id/notifications", handlers.GetNotifications)
 				restaurantsProtected.GET("/:id/notifications/unread-count", handlers.GetUnreadNotificationCount)
+
+				// Package Upgrade
+				restaurantsProtected.POST("/:id/upgrade", handlers.CreateUpgradeSubscription)
 			}
 		}
+
+		// ================================
+		// UPGRADE STATUS - Public (check payment status)
+		// ================================
+		api.GET("/upgrade/:code/status", handlers.GetUpgradeStatus)
 
 		// ================================
 		// TABLES - Protected

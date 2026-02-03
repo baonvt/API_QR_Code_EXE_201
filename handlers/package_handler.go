@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"go-api/config"
 	"go-api/models"
@@ -370,4 +371,158 @@ func GetAdminStats(c *gin.Context) {
 		"new_this_month":     newThisMonth,
 		"by_package":         byPackage,
 	}, "")
+}
+
+// ===============================
+// PACKAGE UPGRADE HANDLERS
+// ===============================
+
+// UpgradePackageInput input cho upgrade package
+type UpgradePackageInput struct {
+	PackageID    uint   `json:"package_id" binding:"required"`
+	BillingCycle string `json:"billing_cycle"` // monthly or yearly
+}
+
+// CreateUpgradeSubscription tạo yêu cầu nâng cấp gói với thanh toán QR
+// @Summary Nâng cấp gói dịch vụ
+// @Description Tạo yêu cầu nâng cấp gói và nhận QR thanh toán
+// @Tags Packages
+// @Accept json
+// @Produce json
+// @Param body body UpgradePackageInput true "Thông tin nâng cấp"
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /restaurants/{id}/upgrade [post]
+func CreateUpgradeSubscription(c *gin.Context) {
+	restaurantID, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+	// Kiểm tra quyền
+	currentRestaurantID, _ := c.Get("restaurant_id")
+	if currentRestaurantID == nil || uint(restaurantID) != *currentRestaurantID.(*uint) {
+		utils.ErrorResponse(c, http.StatusForbidden, "Bạn không có quyền", "FORBIDDEN", "")
+		return
+	}
+
+	var input UpgradePackageInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Dữ liệu không hợp lệ", "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// Lấy thông tin nhà hàng
+	var restaurant models.Restaurant
+	if err := config.GetDB().Preload("Package").First(&restaurant, restaurantID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy nhà hàng", "NOT_FOUND", "")
+		return
+	}
+
+	// Lấy gói muốn upgrade
+	var newPackage models.Package
+	if err := config.GetDB().First(&newPackage, input.PackageID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy gói dịch vụ", "PACKAGE_NOT_FOUND", "")
+		return
+	}
+
+	// Xác định giá
+	billingCycle := input.BillingCycle
+	if billingCycle == "" {
+		billingCycle = "monthly"
+	}
+
+	var amount float64
+	if billingCycle == "yearly" {
+		amount = newPackage.YearlyPrice
+	} else {
+		amount = newPackage.MonthlyPrice
+	}
+
+	// Tạo mã đăng ký unique
+	subscriptionCode := utils.GenerateRandomCode(8)
+	expiresAt := time.Now().Add(24 * time.Hour) // Hết hạn sau 24h
+
+	// Lưu vào PackageSubscription
+	subscription := models.PackageSubscription{
+		Email:          getStringValue(restaurant.Email),
+		Phone:          restaurant.Phone,
+		Name:           restaurant.Name,
+		RestaurantName: restaurant.Name,
+		PackageID:      newPackage.ID,
+		BillingCycle:   billingCycle,
+		Amount:         amount,
+		PaymentCode:    subscriptionCode,
+		PaymentStatus:  "pending",
+		RestaurantID:   &restaurant.ID,
+		ExpiresAt:      expiresAt,
+	}
+
+	if err := config.GetDB().Create(&subscription).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể tạo đăng ký", "CREATE_ERROR", err.Error())
+		return
+	}
+
+	// Lấy thông tin SePay để tạo QR
+	sepayConfig := config.GetSepayConfig()
+	if sepayConfig.BankCode == "" {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Chưa cấu hình thanh toán", "SEPAY_NOT_CONFIGURED", "")
+		return
+	}
+
+	// Tạo QR URL
+	description := "UPGRADE " + subscriptionCode
+	qrURL := utils.GenerateSepayQRURL(
+		sepayConfig.BankCode,
+		sepayConfig.AccountNumber,
+		sepayConfig.AccountName,
+		amount,
+		description,
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"subscription_code": subscriptionCode,
+		"package":           newPackage.DisplayName,
+		"billing_cycle":     billingCycle,
+		"amount":            amount,
+		"qr_url":            qrURL,
+		"bank_info": gin.H{
+			"bank_code":      sepayConfig.BankCode,
+			"account_number": sepayConfig.AccountNumber,
+			"account_name":   sepayConfig.AccountName,
+		},
+		"message": "Quét mã QR để thanh toán. Gói sẽ được kích hoạt sau khi thanh toán thành công.",
+	}, "Tạo yêu cầu nâng cấp thành công")
+}
+
+// GetUpgradeStatus kiểm tra trạng thái nâng cấp
+// @Summary Kiểm tra trạng thái nâng cấp
+// @Description Kiểm tra xem thanh toán nâng cấp đã hoàn tất chưa
+// @Tags Packages
+// @Produce json
+// @Param code path string true "Subscription Code"
+// @Success 200 {object} map[string]interface{}
+// @Router /upgrade/{code}/status [get]
+func GetUpgradeStatus(c *gin.Context) {
+	code := c.Param("code")
+
+	var subscription models.PackageSubscription
+	if err := config.GetDB().Where("payment_code = ?", code).First(&subscription).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy đăng ký", "NOT_FOUND", "")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"code":          subscription.PaymentCode,
+		"status":        subscription.PaymentStatus,
+		"package_id":    subscription.PackageID,
+		"amount":        subscription.Amount,
+		"billing_cycle": subscription.BillingCycle,
+		"paid_at":       subscription.PaidAt,
+	}, "")
+}
+
+// Helper function
+func getStringValue(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

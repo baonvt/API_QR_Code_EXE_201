@@ -55,6 +55,20 @@ func SeedPackages() error {
 
 	packages := []models.Package{
 		{
+			Name:          "Starter",
+			DisplayName:   "Starter",
+			Description:   stringPtr("Gói dùng thử miễn phí 7 ngày"),
+			MonthlyPrice:  0,
+			YearlyPrice:   0,
+			MaxMenuItems:  10,
+			MaxTables:     3,
+			MaxCategories: 3,
+			Features:      stringPtr(`["Quản lý 10 món ăn", "Tối đa 3 bàn", "Đặt món qua QR", "Thanh toán tiền mặt"]`),
+			IsPopular:     false,
+			IsActive:      true,
+			SortOrder:     0,
+		},
+		{
 			Name:          "Basic",
 			DisplayName:   "Gói Cơ Bản",
 			Description:   stringPtr("Phù hợp cho nhà hàng nhỏ, quán ăn gia đình"),
