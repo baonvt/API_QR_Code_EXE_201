@@ -345,3 +345,26 @@ type Notification struct {
 func (Notification) TableName() string {
 	return "notifications"
 }
+
+// ===============================
+// CONTACT MESSAGE MODEL
+// ===============================
+
+// ContactMessage model - Tin nhắn liên hệ từ khách hàng
+type ContactMessage struct {
+	ID        uint       `json:"id" gorm:"primaryKey"`
+	Name      string     `json:"name" gorm:"size:255;not null"`
+	Phone     string     `json:"phone" gorm:"size:20;not null"`
+	Email     string     `json:"email" gorm:"size:255;not null"`
+	Subject   string     `json:"subject" gorm:"size:100;not null"`
+	Message   string     `json:"message" gorm:"type:text;not null"`
+	Status    string     `json:"status" gorm:"size:20;default:'new'"` // new, read, replied, closed
+	Note      *string    `json:"note" gorm:"type:text"`               // Ghi chú của admin
+	RepliedAt *time.Time `json:"replied_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+func (ContactMessage) TableName() string {
+	return "contact_messages"
+}

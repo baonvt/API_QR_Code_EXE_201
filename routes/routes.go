@@ -232,6 +232,11 @@ func SetupRoutes(router *gin.Engine) {
 		}
 
 		// ================================
+		// CONTACT - Public
+		// ================================
+		api.POST("/contact", handlers.CreateContactMessage)
+
+		// ================================
 		// ADMIN - Admin only
 		// ================================
 		admin := api.Group("/admin")
@@ -248,6 +253,11 @@ func SetupRoutes(router *gin.Engine) {
 
 			// Stats
 			admin.GET("/stats", handlers.GetAdminStats)
+
+			// Contact messages management
+			admin.GET("/contacts", handlers.GetContactMessages)
+			admin.PUT("/contacts/:id", handlers.UpdateContactMessageStatus)
+			admin.DELETE("/contacts/:id", handlers.DeleteContactMessage)
 		}
 
 		// ================================
