@@ -29,8 +29,8 @@ type SepayWebhookPayload struct {
 	TransferAmount     float64 `json:"transferAmount"`
 	Accumulated        float64 `json:"accumulated"`
 	Code               *string `json:"code"`
-	TransactionContent string  `json:"content"`          // SePay gửi "content" không phải "transactionContent"
-	ReferenceNumber    string  `json:"referenceCode"`    // SePay gửi "referenceCode" không phải "referenceNumber"
+	TransactionContent string  `json:"content"`       // SePay gửi "content" không phải "transactionContent"
+	ReferenceNumber    string  `json:"referenceCode"` // SePay gửi "referenceCode" không phải "referenceNumber"
 	Description        string  `json:"description"`
 }
 
@@ -225,6 +225,18 @@ func CreateSubscription(c *gin.Context) {
 		return
 	}
 
+	// Nếu là gói miễn phí - trả về response khác
+	if result.IsFree {
+		utils.SuccessResponse(c, http.StatusCreated, gin.H{
+			"subscription_id": result.SubscriptionID,
+			"payment_code":    result.PaymentCode,
+			"amount":          0,
+			"package":         result.PackageName,
+			"is_free":         true,
+		}, "Đăng ký gói miễn phí thành công! Tài khoản đã được kích hoạt.")
+		return
+	}
+
 	utils.SuccessResponse(c, http.StatusCreated, gin.H{
 		"subscription_id": result.SubscriptionID,
 		"payment_code":    result.PaymentCode,
@@ -239,6 +251,7 @@ func CreateSubscription(c *gin.Context) {
 		},
 		"expires_at":         result.ExpiresAt,
 		"expires_in_minutes": result.ExpiresInMins,
+		"is_free":            false,
 	}, "Vui lòng chuyển khoản để hoàn tất đăng ký")
 }
 
