@@ -237,6 +237,16 @@ func UpdateTable(c *gin.Context) {
 			utils.ErrorResponse(c, http.StatusBadRequest, "Trạng thái không hợp lệ", "INVALID_STATUS", "")
 			return
 		}
+
+		// Nếu chuyển về available (đóng bàn), tự động complete các đơn hàng active
+		if input.Status == "available" {
+			config.GetDB().Model(&models.Order{}).
+				Where("table_id = ? AND status IN ?", tableID, []string{"pending", "confirmed", "preparing"}).
+				Updates(map[string]interface{}{
+					"status": "completed",
+				})
+		}
+
 		updates["status"] = input.Status
 	}
 

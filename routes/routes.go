@@ -199,6 +199,9 @@ func SetupRoutes(router *gin.Engine) {
 			// Public: Xem chi tiết đơn hàng (cho tracking)
 			orders.GET("/:id", handlers.GetOrder)
 
+			// Public: Lấy QR thanh toán (cho khách)
+			orders.GET("/:id/payment-qr", handlers.GetOrderPaymentQR)
+
 			// Public: Thêm món vào đơn hàng
 			orders.POST("/:id/items", handlers.AddOrderItems)
 
@@ -258,5 +261,8 @@ func SetupRoutes(router *gin.Engine) {
 			upload.POST("/url", handlers.UploadImageFromURL)
 			upload.DELETE("/image", handlers.DeleteImageHandler)
 		}
+
+		// Test Cloudinary - Public
+		api.GET("/upload/test", handlers.TestCloudinaryUpload)
 	}
 }

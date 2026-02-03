@@ -8,6 +8,7 @@ import (
 
 	"go-api/config"
 	"go-api/models"
+	"go-api/services"
 	"go-api/utils"
 
 	"github.com/gin-gonic/gin"
@@ -281,6 +282,7 @@ func TrackOrder(c *gin.Context) {
 
 	// Response
 	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"id":             order.ID,
 		"order_number":   order.OrderNumber,
 		"status":         order.Status,
 		"payment_status": order.PaymentStatus,
@@ -862,5 +864,83 @@ func GetOrderBill(c *gin.Context) {
 			"status":  order.PaymentStatus,
 			"paid_at": order.PaidAt,
 		},
+	}, "")
+}
+
+// GetOrderPaymentQR - Lấy VietQR code cho thanh toán đơn hàng
+// @Summary Lấy QR thanh toán
+// @Description Tạo VietQR code để khách thanh toán đơn hàng
+// @Tags Orders
+// @Accept json
+// @Produce json
+// @Param id path int true "Order ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /orders/{id}/payment-qr [get]
+func GetOrderPaymentQR(c *gin.Context) {
+	orderID, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+	var order models.Order
+	if err := config.GetDB().
+		Preload("Restaurant").
+		Preload("Restaurant.PaymentSetting").
+		First(&order, orderID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND", "")
+		return
+	}
+
+	// Check if order is already paid
+	if order.PaymentStatus == "paid" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Đơn hàng đã được thanh toán", "ALREADY_PAID", "")
+		return
+	}
+
+	// Get payment settings
+	paymentSetting := order.Restaurant.PaymentSetting
+	if paymentSetting == nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Nhà hàng chưa cấu hình thông tin thanh toán", "PAYMENT_SETTINGS_NOT_FOUND", "")
+		return
+	}
+
+	// Validate bank info
+	if paymentSetting.BankCode == nil || *paymentSetting.BankCode == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Chưa cấu hình mã ngân hàng", "BANK_CODE_MISSING", "")
+		return
+	}
+	if paymentSetting.AccountNumber == nil || *paymentSetting.AccountNumber == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Chưa cấu hình số tài khoản", "ACCOUNT_NUMBER_MISSING", "")
+		return
+	}
+
+	accountName := "Nha Hang"
+	if paymentSetting.AccountName != nil {
+		accountName = *paymentSetting.AccountName
+	}
+
+	// Generate description
+	description := fmt.Sprintf("Thanh toan don %s", order.OrderNumber)
+
+	// Generate VietQR URL
+	qrURL, err := services.GenerateVietQRURL(
+		*paymentSetting.BankCode,
+		*paymentSetting.AccountNumber,
+		accountName,
+		order.TotalAmount,
+		description,
+	)
+
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể tạo mã QR", "QR_GENERATION_ERROR", err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"order_number":   order.OrderNumber,
+		"total_amount":   order.TotalAmount,
+		"qr_url":         qrURL,
+		"bank_name":      paymentSetting.BankName,
+		"bank_code":      paymentSetting.BankCode,
+		"account_number": paymentSetting.AccountNumber,
+		"account_name":   paymentSetting.AccountName,
+		"description":    description,
 	}, "")
 }

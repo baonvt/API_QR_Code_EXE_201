@@ -7,6 +7,7 @@ import (
 	"go-api/config"
 	_ "go-api/docs" // Swagger docs
 	"go-api/routes"
+	"go-api/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -44,6 +45,24 @@ func main() {
 
 	// Load SePay config
 	config.LoadSepayConfig()
+
+	// Initialize Cloudinary
+	cloudName := os.Getenv("CLOUDINARY_CLOUD_NAME")
+	apiKey := os.Getenv("CLOUDINARY_API_KEY")
+	apiSecret := os.Getenv("CLOUDINARY_API_SECRET")
+
+	if cloudName == "" {
+		cloudName = "exe2"
+	}
+	if apiKey == "" {
+		apiKey = "393833776691895"
+	}
+	if apiSecret == "" {
+		apiSecret = "1M8zGAiS9VF9fG24JpDl4_Zbi5s"
+	}
+
+	log.Printf("Initializing Cloudinary with cloud name: %s", cloudName)
+	services.InitCloudinary(cloudName, apiKey, apiSecret)
 
 	// Chạy migrations
 	if err := config.RunMigrations(); err != nil {
