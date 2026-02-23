@@ -250,6 +250,7 @@ func TrackOrder(c *gin.Context) {
 		Preload("OrderItems").
 		Preload("OrderItems.MenuItem").
 		Where("order_number = ?", orderNumber).
+		Order("created_at DESC").
 		First(&order).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy đơn hàng", "ORDER_NOT_FOUND", "")
 		return
@@ -341,10 +342,24 @@ func CreateOrder(c *gin.Context) {
 	db := config.GetDB()
 	tx := db.Begin()
 
-	// Tạo order number
-	var orderCount int64
-	tx.Model(&models.Order{}).Where("restaurant_id = ?", restaurant.ID).Count(&orderCount)
-	orderNumber := fmt.Sprintf("ORD-%d-%04d", time.Now().Year(), orderCount+1)
+	// Tạo order number unique (global, không theo restaurant)
+	yearPrefix := fmt.Sprintf("ORD-%d-", time.Now().Year())
+	var maxOrderNum string
+	tx.Model(&models.Order{}).
+		Where("order_number LIKE ?", yearPrefix+"%").
+		Order("order_number DESC").
+		Limit(1).
+		Pluck("order_number", &maxOrderNum)
+
+	nextSeq := 1
+	if maxOrderNum != "" {
+		// VD: "ORD-2026-0015" → lấy "0015" → parse thành 15
+		seqStr := maxOrderNum[len(yearPrefix):]
+		if parsed, err := strconv.Atoi(seqStr); err == nil {
+			nextSeq = parsed + 1
+		}
+	}
+	orderNumber := fmt.Sprintf("%s%04d", yearPrefix, nextSeq)
 
 	// Validate payment method
 	validMethods := []string{"cash", "qr", "momo", "vnpay"}
