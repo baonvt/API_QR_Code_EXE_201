@@ -175,6 +175,56 @@ func GetMenuBySlug(c *gin.Context) {
 	}, "")
 }
 
+// GetMenuItemBySlug lấy chi tiết một món theo slug nhà hàng và item ID (Public - cho khách)
+// @Summary Lấy chi tiết món ăn theo slug
+// @Description Lấy chi tiết một món ăn theo slug nhà hàng và ID món (cho khách hàng)
+// @Tags Public
+// @Accept json
+// @Produce json
+// @Param slug path string true "Restaurant Slug"
+// @Param itemId path int true "Menu Item ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /public/restaurants/{slug}/menu-items/{itemId} [get]
+func GetMenuItemBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+	itemID, _ := strconv.ParseUint(c.Param("itemId"), 10, 32)
+
+	// Tìm nhà hàng theo slug
+	var restaurant models.Restaurant
+	if err := config.GetDB().Where("slug = ? AND status = ?", slug, "active").First(&restaurant).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy nhà hàng", "RESTAURANT_NOT_FOUND", "")
+		return
+	}
+
+	// Tìm menu item thuộc nhà hàng đó
+	var item models.MenuItem
+	if err := config.GetDB().Preload("Category").
+		Where("id = ? AND restaurant_id = ? AND status = ?", itemID, restaurant.ID, "active").
+		First(&item).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Không tìm thấy món ăn", "MENU_ITEM_NOT_FOUND", "")
+		return
+	}
+
+	categoryName := ""
+	if item.Category != nil {
+		categoryName = item.Category.Name
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, gin.H{
+		"id":            item.ID,
+		"name":          item.Name,
+		"description":   item.Description,
+		"price":         item.Price,
+		"image":         item.Image,
+		"category_id":   item.CategoryID,
+		"category_name": categoryName,
+		"options":       item.Options,
+		"tags":          item.Tags,
+		"prep_location": item.PrepLocation,
+		"prep_time":     item.PrepTime,
+	}, "")
+}
+
 // CreateMenuItem tạo món mới
 // @Summary Tạo món mới
 // @Description Tạo một món ăn mới cho nhà hàng
