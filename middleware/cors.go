@@ -14,6 +14,7 @@ func CORSMiddleware() gin.HandlerFunc {
 			"https://fbmanager.io.vn",
 			"http://fbmanager.io.vn",
 			"https://www.fbmanager.io.vn",
+			"https://feexeproject-production-16ae.up.railway.app",
 			"http://localhost:3000",
 			"http://localhost:5173",
 			"http://localhost:8080",
