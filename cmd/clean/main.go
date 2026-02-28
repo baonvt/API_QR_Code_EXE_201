@@ -12,7 +12,7 @@ import (
 func main() {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgresql://postgres:bfFaQNBGXYJxGwBdCLzCQnOMPGpMxaHU@shinkansen.proxy.rlwy.net:18641/railway"
+		dsn = "postgresql://postgres:xONvpdQBoVghOadodkdMaSOQBdyIEOSb@gondola.proxy.rlwy.net:18128/railway"
 	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})

@@ -19,7 +19,7 @@ import (
 // @version 1.0
 // @description API quản lý nhà hàng - Khách order và thanh toán trực tiếp
 
-// @host apiqrcodeexe201-production.up.railway.app
+// @host apiqrcodeexe201-production-3809.up.railway.app
 // @BasePath /api/v1
 // @schemes https
 

@@ -19,8 +19,8 @@ func ConnectDatabase() {
 	// Lấy DATABASE_URL từ environment hoặc dùng default
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		// Default Railway PostgreSQL
-		dsn = "postgresql://postgres:uWLeEYyJrtghKNqabNlBQodJpGpVBnyt@shinkansen.proxy.rlwy.net:18641/railway"
+		// Default Railway PostgreSQL (updated)
+		dsn = "postgresql://postgres:xONvpdQBoVghOadodkdMaSOQBdyIEOSb@gondola.proxy.rlwy.net:18128/railway"
 	}
 
 	log.Println("Connecting to database...")
@@ -39,4 +39,3 @@ func ConnectDatabase() {
 func GetDB() *gorm.DB {
 	return DB
 }
-
