@@ -118,11 +118,33 @@ func GetOrders(c *gin.Context) {
 		return
 	}
 
+	// Lấy danh sách Order IDs
+	var orderIDs []uint
+	for _, order := range orders {
+		orderIDs = append(orderIDs, order.ID)
+	}
+
+	// Đếm số lượng món cho mỗi order ID (Batch processing)
+	itemCounts := make(map[uint]int64)
+	if len(orderIDs) > 0 {
+		type result struct {
+			OrderID uint
+			Count   int64
+		}
+		var counts []result
+		config.GetDB().Model(&models.OrderItem{}).
+			Select("order_id, count(id) as count").
+			Where("order_id IN ?", orderIDs).
+			Group("order_id").
+			Scan(&counts)
+		for _, c := range counts {
+			itemCounts[c.OrderID] = c.Count
+		}
+	}
+
 	var data []gin.H
 	for _, order := range orders {
-		// Đếm số món
-		var itemsCount int64
-		config.GetDB().Model(&models.OrderItem{}).Where("order_id = ?", order.ID).Count(&itemsCount)
+		itemsCount := itemCounts[order.ID]
 
 		tableName := ""
 		tableNumber := 0
@@ -400,12 +422,31 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// Tạo order items
+	// Tạo order items (Batch Processing)
 	var subtotal float64 = 0
+	var orderItems []models.OrderItem
+
+	// Lấy tất cả menu item IDs
+	menuItemIDs := make([]uint, 0, len(input.Items))
 	for _, itemInput := range input.Items {
-		// Lấy thông tin món
-		var menuItem models.MenuItem
-		if err := tx.Where("id = ? AND restaurant_id = ? AND status = ?", itemInput.MenuItemID, restaurant.ID, "active").First(&menuItem).Error; err != nil {
+		menuItemIDs = append(menuItemIDs, itemInput.MenuItemID)
+	}
+
+	var menuItems []models.MenuItem
+	if err := tx.Where("id IN ? AND restaurant_id = ? AND status = ?", menuItemIDs, restaurant.ID, "active").Find(&menuItems).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Lỗi kiểm tra món ăn", "DB_ERROR", err.Error())
+		return
+	}
+
+	menuItemMap := make(map[uint]models.MenuItem)
+	for _, item := range menuItems {
+		menuItemMap[item.ID] = item
+	}
+
+	for _, itemInput := range input.Items {
+		menuItem, exists := menuItemMap[itemInput.MenuItemID]
+		if !exists {
 			tx.Rollback()
 			utils.ErrorResponse(c, http.StatusBadRequest, "Món không tồn tại hoặc đã ngừng bán", "INVALID_MENU_ITEM", "")
 			return
@@ -414,20 +455,26 @@ func CreateOrder(c *gin.Context) {
 		lineTotal := menuItem.Price * float64(itemInput.Quantity)
 		subtotal += lineTotal
 
+		opts := itemInput.SelectedOptions
+		notes := itemInput.Notes
+
 		orderItem := models.OrderItem{
 			OrderID:         order.ID,
 			MenuItemID:      menuItem.ID,
 			ItemName:        menuItem.Name,
 			ItemPrice:       menuItem.Price,
 			Quantity:        itemInput.Quantity,
-			SelectedOptions: &itemInput.SelectedOptions,
-			Notes:           &itemInput.Notes,
+			SelectedOptions: &opts,
+			Notes:           &notes,
 			PrepStatus:      "pending", // Chờ xác nhận
 			PrepLocation:    menuItem.PrepLocation,
 			LineTotal:       lineTotal,
 		}
+		orderItems = append(orderItems, orderItem)
+	}
 
-		if err := tx.Create(&orderItem).Error; err != nil {
+	if len(orderItems) > 0 {
+		if err := tx.Create(&orderItems).Error; err != nil {
 			tx.Rollback()
 			utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể tạo chi tiết đơn hàng", "CREATE_ITEM_ERROR", err.Error())
 			return
@@ -746,9 +793,29 @@ func AddOrderItems(c *gin.Context) {
 	tx := db.Begin()
 
 	var addedSubtotal float64 = 0
+	var orderItems []models.OrderItem
+
+	// Lấy tất cả menu item IDs
+	menuItemIDs := make([]uint, 0, len(input.Items))
 	for _, itemInput := range input.Items {
-		var menuItem models.MenuItem
-		if err := tx.Where("id = ? AND restaurant_id = ? AND status = ?", itemInput.MenuItemID, order.RestaurantID, "active").First(&menuItem).Error; err != nil {
+		menuItemIDs = append(menuItemIDs, itemInput.MenuItemID)
+	}
+
+	var menuItems []models.MenuItem
+	if err := tx.Where("id IN ? AND restaurant_id = ? AND status = ?", menuItemIDs, order.RestaurantID, "active").Find(&menuItems).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Lỗi kiểm tra món ăn", "DB_ERROR", err.Error())
+		return
+	}
+
+	menuItemMap := make(map[uint]models.MenuItem)
+	for _, item := range menuItems {
+		menuItemMap[item.ID] = item
+	}
+
+	for _, itemInput := range input.Items {
+		menuItem, exists := menuItemMap[itemInput.MenuItemID]
+		if !exists {
 			tx.Rollback()
 			utils.ErrorResponse(c, http.StatusBadRequest, "Món không tồn tại hoặc đã ngừng bán", "INVALID_MENU_ITEM", "")
 			return
@@ -757,20 +824,26 @@ func AddOrderItems(c *gin.Context) {
 		lineTotal := menuItem.Price * float64(itemInput.Quantity)
 		addedSubtotal += lineTotal
 
+		opts := itemInput.SelectedOptions
+		notes := itemInput.Notes
+
 		orderItem := models.OrderItem{
 			OrderID:         order.ID,
 			MenuItemID:      menuItem.ID,
 			ItemName:        menuItem.Name,
 			ItemPrice:       menuItem.Price,
 			Quantity:        itemInput.Quantity,
-			SelectedOptions: &itemInput.SelectedOptions,
-			Notes:           &itemInput.Notes,
+			SelectedOptions: &opts,
+			Notes:           &notes,
 			PrepStatus:      "confirmed", // Không cần bếp - xác nhận luôn
 			PrepLocation:    "service",   // Phục vụ trực tiếp
 			LineTotal:       lineTotal,
 		}
+		orderItems = append(orderItems, orderItem)
+	}
 
-		if err := tx.Create(&orderItem).Error; err != nil {
+	if len(orderItems) > 0 {
+		if err := tx.Create(&orderItems).Error; err != nil {
 			tx.Rollback()
 			utils.ErrorResponse(c, http.StatusInternalServerError, "Không thể thêm món", "CREATE_ITEM_ERROR", err.Error())
 			return

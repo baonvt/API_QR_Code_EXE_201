@@ -135,10 +135,20 @@ func GetMenuBySlug(c *gin.Context) {
 	}
 
 	var menuData []gin.H
+	
+	// Preload all active items for the restaurant to avoid N+1 query
+	var allItems []models.MenuItem
+	config.GetDB().Where("restaurant_id = ? AND status = ?", restaurant.ID, "active").
+		Order("sort_order ASC").Find(&allItems)
+
+	// Group items by category_id
+	itemsByCat := make(map[uint][]models.MenuItem)
+	for _, item := range allItems {
+		itemsByCat[item.CategoryID] = append(itemsByCat[item.CategoryID], item)
+	}
+
 	for _, cat := range categories {
-		var items []models.MenuItem
-		config.GetDB().Where("category_id = ? AND status = ?", cat.ID, "active").
-			Order("sort_order ASC").Find(&items)
+		items := itemsByCat[cat.ID]
 
 		var itemsData []gin.H
 		for _, item := range items {
