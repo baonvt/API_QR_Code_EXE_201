@@ -410,6 +410,8 @@ func GetTableDetail(c *gin.Context) {
 			"payment_status": order.PaymentStatus,
 			"payment_method": order.PaymentMethod,
 			"total_amount":   order.TotalAmount,
+			"customer_name":  order.CustomerName,
+			"customer_phone": order.CustomerPhone,
 			"notes":          order.Notes,
 			"created_at":     order.CreatedAt,
 			"items":          itemsData,
